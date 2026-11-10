@@ -19,3 +19,11 @@ export function bareRepo(): string {
 }
 
 export const userLine = (text: string): string => `${JSON.stringify({ type: 'user', message: { content: text } })}\n`;
+
+export const userLineAt = (text: string, iso: string): string =>
+  `${JSON.stringify({ type: 'user', timestamp: iso, message: { content: text } })}\n`;
+
+/** Sets a file's modification time (what the age limit looks at). */
+export const touch = (dir: string, name: string, when: Date): void => {
+  fs.utimesSync(path.join(dir, name), when, when);
+};

@@ -2,6 +2,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { isValidRepoUrl, remoteOf } from './core/git';
+import { Limits, MB, parseLimits } from './core/limits';
 import { Logger } from './core/logger';
 import { claudeProjectsDir, encodeProjectDir, projectKey } from './core/paths';
 import { SyncResult, SyncService } from './core/syncService';
@@ -21,6 +22,7 @@ interface Session {
   service: SyncService;
   localDir: string;
   folder: string;
+  limits: Limits;
 }
 
 async function openSession(context: vscode.ExtensionContext, log: Logger): Promise<Session | undefined> {
@@ -42,11 +44,15 @@ async function openSession(context: vscode.ExtensionContext, log: Logger): Promi
   const repoDir = path.join(context.globalStorageUri.fsPath, 'repo');
   const localDir = path.join(claudeProjectsDir(cfg.get<string>('claudeDir', '')), encodeProjectDir(folder));
   const key = projectKey(await remoteOf(folder), folder);
+  const limits = parseLimits({
+    maxFileSizeMB: cfg.get('maxFileSizeMB'),
+    maxSessionAgeDays: cfg.get('maxSessionAgeDays'),
+  });
   const service = new SyncService(
-    { repoUrl, repoDir, localDir, remoteDir: path.join(repoDir, 'projects', key), hostname: os.hostname() },
+    { repoUrl, repoDir, localDir, remoteDir: path.join(repoDir, 'projects', key), hostname: os.hostname(), limits },
     log,
   );
-  return { service, localDir, folder };
+  return { service, localDir, folder, limits };
 }
 
 async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boolean> {
@@ -60,12 +66,19 @@ async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boole
   return Boolean(ok);
 }
 
-function report(verb: string, r: SyncResult): void {
+function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits): void {
+  const older = r.tooOld > 0 ? ` ${r.tooOld} older than ${limits.maxAgeDays} days left out.` : '';
   void vscode.window.showInformationMessage(
     r.pushed === false
-      ? `Claude Sync: nothing new to ${verb}.`
-      : `Claude Sync: ${verb}ed ${r.copied.length} session(s).`,
+      ? `Claude Sync: nothing new to ${verb}.${older}`
+      : `Claude Sync: ${verb}ed ${r.copied.length} session(s).${older}`,
   );
+  if (r.tooLarge.length) {
+    void vscode.window.showWarningMessage(
+      `Claude Sync: ${r.tooLarge.length} session(s) are over ${Math.round(limits.maxFileBytes / MB)} MB and were NOT pushed ` +
+        `(GitHub rejects files over 100 MB): ${r.tooLarge.join(', ')}`,
+    );
+  }
   if (r.conflicts.length) {
     void vscode.window.showWarningMessage(
       `Claude Sync: ${r.conflicts.length} session(s) were continued on two devices and were NOT overwritten: ${r.conflicts.join(', ')}`,
@@ -99,12 +112,12 @@ export function activate(context: vscode.ExtensionContext): void {
     command(
       'push',
       async (s) => {
-        report('push', await progress('Claude Sync: pushing…', () => s.service.push()));
+        report('push', await progress('Claude Sync: pushing…', () => s.service.push()), s.limits);
       },
       () => confirmFirstPush(context),
     ),
     command('pull', async (s) => {
-      report('pull', await progress('Claude Sync: pulling…', () => s.service.pull()));
+      report('pull', await progress('Claude Sync: pulling…', () => s.service.pull()), s.limits);
     }),
     command('resume', async (s) => {
       const sessions = listSessions(s.localDir);
@@ -113,7 +126,11 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const pick = await vscode.window.showQuickPick(
-        sessions.map((x) => ({ label: x.title, description: new Date(x.mtime).toLocaleString(), detail: x.id })),
+        sessions.map((x) => ({
+          label: x.title,
+          description: new Date(x.lastActivity).toLocaleString(),
+          detail: x.id,
+        })),
         { placeHolder: 'Choose a session to resume', matchOnDetail: true },
       );
       if (!pick?.detail) return;

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { SyncService } from '../core/syncService';
-import { bareRepo, read, tmp, userLine, write } from './helpers';
+import { SyncConfig, SyncService } from '../core/syncService';
+import { bareRepo, read, tmp, touch, userLine, write } from './helpers';
 
 /** One "device": its own ~/.claude project dir and its own clone, sharing the bare remote. */
-function device(remote: string, name: string) {
+function device(remote: string, name: string, extra: Partial<SyncConfig> = {}) {
   const root = tmp();
   const repoDir = path.join(root, 'repo');
   const localDir = path.join(root, 'claude-project');
@@ -15,6 +15,7 @@ function device(remote: string, name: string) {
     localDir,
     remoteDir: path.join(repoDir, 'projects', 'k'),
     hostname: name,
+    ...extra,
   });
   return { service, localDir };
 }
@@ -78,4 +79,46 @@ test('concurrent calls on one service are serialised, not interleaved', async ()
   write(d.localDir, 's.jsonl', userLine('x'));
   const results = await Promise.all([d.service.push(), d.service.push(), d.service.pull()]);
   assert.equal(results.length, 3);
+});
+
+test('a push leaves out sessions over the size limit and reports them, so one huge file cannot fail the push', async () => {
+  const remote = bareRepo();
+  const [laptop, desktop] = [
+    device(remote, 'laptop', { limits: { maxFileBytes: 200, maxAgeDays: 0 } }),
+    device(remote, 'desktop'),
+  ];
+  write(laptop.localDir, 'small.jsonl', userLine('ok'));
+  write(laptop.localDir, 'big.jsonl', userLine('x'.repeat(500)));
+
+  const r = await laptop.service.push();
+  assert.deepEqual(r.copied, ['small.jsonl']);
+  assert.deepEqual(r.tooLarge, ['big.jsonl']);
+  assert.deepEqual((await desktop.service.pull()).copied, ['small.jsonl']);
+});
+
+test('a push leaves out sessions older than the age limit and counts them', async () => {
+  const remote = bareRepo();
+  const now = Date.parse('2026-11-10T12:00:00Z');
+  const laptop = device(remote, 'laptop', { limits: { maxFileBytes: 1e9, maxAgeDays: 30 }, now: () => now });
+  write(laptop.localDir, 'new.jsonl', userLine('recent'));
+  write(laptop.localDir, 'old.jsonl', userLine('ancient'));
+  touch(laptop.localDir, 'new.jsonl', new Date('2026-11-09'));
+  touch(laptop.localDir, 'old.jsonl', new Date('2026-09-01'));
+
+  const r = await laptop.service.push();
+  assert.deepEqual(r.copied, ['new.jsonl']);
+  assert.equal(r.tooOld, 1);
+});
+
+test('the push limits do not apply to a pull', async () => {
+  const remote = bareRepo();
+  const [laptop, desktop] = [
+    device(remote, 'laptop'),
+    device(remote, 'desktop', { limits: { maxFileBytes: 10, maxAgeDays: 1 } }),
+  ];
+  write(laptop.localDir, 'big.jsonl', userLine('x'.repeat(500)));
+  await laptop.service.push();
+  const r = await desktop.service.pull();
+  assert.deepEqual(r.copied, ['big.jsonl']);
+  assert.equal(r.tooOld, 0);
 });

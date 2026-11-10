@@ -2,7 +2,7 @@
   "name": "claude-session-sync",
   "displayName": "Claude Session Sync",
   "description": "Continue a Claude Code session on another device: syncs transcripts through your own private git repository.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -58,6 +58,21 @@
           "default": "",
           "scope": "machine",
           "markdownDescription": "Claude config directory. Empty = `~/.claude`."
+        },
+        "claudeSessionSync.maxFileSizeMB": {
+          "type": "number",
+          "default": 90,
+          "minimum": 1,
+          "maximum": 95,
+          "scope": "machine",
+          "markdownDescription": "Sessions bigger than this are **not pushed** (and are reported). GitHub rejects any file over 100 MB, and one such file fails the whole push."
+        },
+        "claudeSessionSync.maxSessionAgeDays": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "scope": "machine",
+          "markdownDescription": "Push only sessions modified within this many days. `0` = no limit. A pull always takes everything the repository holds."
         }
       }
     }

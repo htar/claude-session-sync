@@ -1,0 +1,86 @@
+{
+  "name": "claude-session-sync",
+  "displayName": "Claude Session Sync",
+  "description": "Continue a Claude Code session on another device: syncs transcripts through your own private git repository.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "sync",
+    "sessions"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Reads and writes ~/.claude and runs git."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeSessionSync.push",
+        "title": "Push sessions",
+        "category": "Claude Sync"
+      },
+      {
+        "command": "claudeSessionSync.pull",
+        "title": "Pull sessions",
+        "category": "Claude Sync"
+      },
+      {
+        "command": "claudeSessionSync.resume",
+        "title": "Resume a session",
+        "category": "Claude Sync"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Session Sync",
+      "properties": {
+        "claudeSessionSync.repoUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "URL of a **private** git repository that stores the transcripts (`https://…`, `ssh://…` or `git@host:owner/repo.git`)."
+        },
+        "claudeSessionSync.claudeDir": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Claude config directory. Empty = `~/.claude`."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --target=node18 --external:vscode --sourcemap --outfile=dist/extension.js",
+    "build:prod": "esbuild src/extension.ts --bundle --platform=node --target=node18 --external:vscode --minify --outfile=dist/extension.js",
+    "typecheck": "tsc -p . --noEmit",
+    "lint": "eslint . --max-warnings 0 && prettier --check .",
+    "lint:fix": "eslint . --fix && prettier --write .",
+    "test": "tsc -p tsconfig.test.json && node --test out/test/*.test.js",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "package": "npm run build:prod && vsce package --allow-missing-repository --skip-license"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}

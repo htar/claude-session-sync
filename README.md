@@ -21,14 +21,17 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 
 1. Install the extension and open **the same project** (same git remote).
 2. Run **Claude Sync: Pull sessions** and choose the same method.
-3. A list of the sessions in the storage appears: title, date, size and status. Tick the ones you need, or press "Select all".
-4. Run **Claude Sync: Resume a session**, pick one, and a terminal opens with `claude --resume`.
+3. Choose **which device** to import from (skipped when only one other device has exported).
+4. A list of that device's sessions appears: title, date, size and status. Tick the ones you need, or press "Select all".
+5. Run **Claude Sync: Resume a session**, pick one, and a terminal opens with `claude --resume`.
 
 ### Rules of thumb
 
 - **Push before you leave a device, Pull before you start on another.**
 - Do not continue one session on two devices at once: the extension reports a conflict and overwrites nothing.
 - A cloud service does not deliver files instantly: if Pull finds nothing, wait a minute and try again.
+- Every device exports to its own folder (named after the device, see `claudeSessionSync.deviceName`), so devices never overwrite each other and you always pick the source yourself.
+- Remove what a device exported: **Claude Sync: Delete exported sessions** (asks for confirmation; your own sessions on your devices are never touched).
 - Change the method any time: **Claude Sync: Choose sync method**. To forget it altogether: **Claude Sync: Disconnect storage** (nothing is deleted from the storage or from your device).
 
 ## Ways to sync
@@ -43,12 +46,13 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 
 All settings apply per machine: set them in User settings.
 
-| Setting                               | Default | What it does                                                              |
-| ------------------------------------- | ------- | ------------------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | empty   | `github`, `folder` (cloud storage) or `git`. Empty = ask on first use.    |
-| `claudeSessionSync.repoUrl`           | empty   | Address of the private repository for the "own git" method.               |
-| `claudeSessionSync.maxFileSizeMB`     | `90`    | Sessions larger than this are not pushed (and you are warned).            |
-| `claudeSessionSync.maxSessionAgeDays` | `30`    | Only sessions modified within the last N days are pushed. `0` = no limit. |
+| Setting                               | Default   | What it does                                                              |
+| ------------------------------------- | --------- | ------------------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | empty     | `github`, `folder` (cloud storage) or `git`. Empty = ask on first use.    |
+| `claudeSessionSync.deviceName`        | host name | This device's name in the storage: other devices pick it when importing.  |
+| `claudeSessionSync.repoUrl`           | empty     | Address of the private repository for the "own git" method.               |
+| `claudeSessionSync.maxFileSizeMB`     | `90`      | Sessions larger than this are not pushed (and you are warned).            |
+| `claudeSessionSync.maxSessionAgeDays` | `30`      | Only sessions modified within the last N days are pushed. `0` = no limit. |
 
 ## Security
 

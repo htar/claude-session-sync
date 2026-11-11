@@ -2,6 +2,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { isValidRepoUrl, remoteOf } from './core/git';
+import { DeviceInfo } from './core/devices';
 import { ensureSyncFolder, STORAGES, storageRoots } from './core/storages';
 import { ensurePrivateRepo, githubAuthEnv } from './core/github';
 import { Limits, MB, parseLimits } from './core/limits';
@@ -167,7 +168,8 @@ async function openSession(context: vscode.ExtensionContext, log: Logger): Promi
     maxFileSizeMB: cfg.get('maxFileSizeMB'),
     maxSessionAgeDays: cfg.get('maxSessionAgeDays'),
   });
-  const service = new SyncService({ transport, localDir, projectKey: key, hostname: os.hostname(), limits }, log);
+  const deviceName = cfg.get<string>('deviceName', '').trim() || os.hostname();
+  const service = new SyncService({ transport, localDir, projectKey: key, deviceName, limits }, log);
   return { service, localDir, folder, limits, where: describeMethod(vscode.workspace.getConfiguration(SECTION)) };
 }
 
@@ -184,9 +186,9 @@ async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boole
 
 const CHANGE_METHOD = 'Change method';
 
-function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: string): void {
+function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: string, device: string): void {
   const older = r.tooOld > 0 ? ` ${r.tooOld} older than ${limits.maxAgeDays} days left out.` : '';
-  const via = `${verb === 'push' ? 'to' : 'from'} ${where}`;
+  const via = verb === 'push' ? `to ${where} as «${device}»` : `from «${device}» in ${where}`;
   void vscode.window
     .showInformationMessage(
       r.pushed === false
@@ -216,6 +218,35 @@ function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: str
 const mb = (bytes: number) =>
   bytes < MB ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / MB).toFixed(1)} MB`;
 
+const deviceLabel = (d: DeviceInfo): string => (d.legacy ? 'Shared (before 0.5.0)' : d.name);
+
+/** Which device's export to work with. Skips the question when there is only one candidate. */
+async function chooseDevice(
+  service: SyncService,
+  opts: { includeOwn: boolean; title: string },
+): Promise<DeviceInfo | undefined> {
+  const all = await progress('Claude Sync: looking at the storage…', () => service.devices());
+  const devices = all.filter((d) => opts.includeOwn || d.name !== service.device);
+  if (!devices.length) {
+    void vscode.window.showInformationMessage(
+      opts.includeOwn
+        ? 'Claude Sync: nothing has been exported for this project yet.'
+        : 'Claude Sync: no other device has exported this project yet. Run «Push sessions» on that device first.',
+    );
+    return undefined;
+  }
+  if (devices.length === 1 && !opts.includeOwn) return devices[0];
+  const pick = await vscode.window.showQuickPick(
+    devices.map((d) => ({
+      label: deviceLabel(d) + (d.name === service.device ? ' (this device)' : ''),
+      description: `${d.sessions} session(s)`,
+      device: d,
+    })),
+    { title: opts.title, placeHolder: 'Choose a device' },
+  );
+  return pick?.device;
+}
+
 const STATUS_LABEL: Record<string, string> = {
   new: 'new on this device',
   updated: 'newer than your copy',
@@ -223,8 +254,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** Lets the user tick the sessions to bring over. Returns their ids, or undefined when cancelled or nothing is left to pull. */
-async function chooseSessionsToPull(service: SyncService): Promise<string[] | undefined> {
-  const sessions = (await progress('Claude Sync: looking at the storage…', () => service.available())).filter(
+async function chooseSessionsToPull(service: SyncService, from: string): Promise<string[] | undefined> {
+  const sessions = (await progress('Claude Sync: looking at the storage…', () => service.available(from))).filter(
     (x) => x.status !== 'same',
   );
   if (!sessions.length) {
@@ -286,7 +317,13 @@ export function activate(context: vscode.ExtensionContext): void {
     command(
       'push',
       async (s) => {
-        report('push', await progress('Claude Sync: pushing…', () => s.service.push()), s.limits, s.where);
+        report(
+          'push',
+          await progress('Claude Sync: pushing…', () => s.service.push()),
+          s.limits,
+          s.where,
+          s.service.device,
+        );
       },
       () => confirmFirstPush(context),
     ),
@@ -322,9 +359,33 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     }),
     command('pull', async (s) => {
-      const chosen = await chooseSessionsToPull(s.service);
+      const from = await chooseDevice(s.service, {
+        includeOwn: false,
+        title: 'Claude Sync: import from which device?',
+      });
+      if (!from) return;
+      const chosen = await chooseSessionsToPull(s.service, from.name);
       if (!chosen) return;
-      report('pull', await progress('Claude Sync: pulling…', () => s.service.pull(chosen)), s.limits, s.where);
+      const result = await progress('Claude Sync: pulling…', () => s.service.pull(from.name, chosen));
+      report('pull', result, s.limits, s.where, deviceLabel(from));
+    }),
+    command('deleteExport', async (s) => {
+      const from = await chooseDevice(s.service, {
+        includeOwn: true,
+        title: 'Claude Sync: delete the exported sessions of which device?',
+      });
+      if (!from) return;
+      const ok = await vscode.window.showWarningMessage(
+        `Delete the ${from.sessions} session(s) of this project that «${deviceLabel(from)}» exported to ${s.where}? ` +
+          'Sessions on your devices are not touched, but the stored copies cannot be restored from here.',
+        { modal: true },
+        'Delete',
+      );
+      if (!ok) return;
+      const { removed } = await progress('Claude Sync: deleting…', () => s.service.removeDevice(from.name));
+      void vscode.window.showInformationMessage(
+        `Claude Sync: deleted ${removed} stored session(s) of «${deviceLabel(from)}».`,
+      );
     }),
     command('resume', async (s) => {
       const sessions = listSessions(s.localDir);

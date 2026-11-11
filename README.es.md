@@ -21,14 +21,17 @@ Los comandos están en la Paleta de comandos: **Cmd+Shift+P** (Windows y Linux: 
 
 1. Instala la extensión y abre **el mismo proyecto** (mismo remoto de git).
 2. Ejecuta **Claude Sync: Pull sessions** y elige el mismo método.
-3. Aparece la lista de sesiones del almacenamiento: título, fecha, tamaño y estado. Marca las que necesites o pulsa «Select all».
-4. Ejecuta **Claude Sync: Resume a session**, elige una y se abre una terminal con `claude --resume`.
+3. Elige **desde qué dispositivo** importar (se omite si solo otro dispositivo ha exportado).
+4. Aparece la lista de sesiones de ese dispositivo: título, fecha, tamaño y estado. Marca las que necesites o pulsa «Select all».
+5. Ejecuta **Claude Sync: Resume a session**, elige una y se abre una terminal con `claude --resume`.
 
 ### Reglas prácticas
 
 - **Haz Push antes de dejar un dispositivo y Pull antes de empezar en otro.**
 - No continúes una misma sesión en dos dispositivos a la vez: la extensión avisa del conflicto y no sobrescribe nada.
 - Un servicio en la nube no entrega los archivos al instante: si Pull no encuentra nada, espera un minuto e inténtalo de nuevo.
+- Cada dispositivo exporta a su propia carpeta (con el nombre del dispositivo, ver `claudeSessionSync.deviceName`), así que no se sobrescriben entre sí y tú eliges el origen.
+- Elimina lo que exportó un dispositivo: **Claude Sync: Delete exported sessions** (pide confirmación; tus sesiones en tus dispositivos no se tocan).
 - Cambia el método cuando quieras: **Claude Sync: Choose sync method**. Para desconectar la nube: **Claude Sync: Disconnect storage** (no se borra nada del almacenamiento ni del dispositivo).
 
 ## Formas de sincronizar
@@ -46,6 +49,7 @@ Todos los ajustes se aplican por equipo: defínelos en los ajustes de usuario (U
 | Ajuste                                | Valor por defecto | Qué hace                                                                                  |
 | ------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------- |
 | `claudeSessionSync.mode`              | vacío             | `github`, `folder` (almacenamiento en la nube) o `git`. Vacío = preguntar la primera vez. |
+| `claudeSessionSync.deviceName`        | nombre del equipo | Nombre de este dispositivo en el almacenamiento: los demás lo eligen al importar.         |
 | `claudeSessionSync.repoUrl`           | vacío             | Dirección del repositorio privado para el método «git propio».                            |
 | `claudeSessionSync.maxFileSizeMB`     | `90`              | Las sesiones más grandes que esto no se envían (y se te avisa).                           |
 | `claudeSessionSync.maxSessionAgeDays` | `30`              | Solo se envían las sesiones modificadas en los últimos N días. `0` = sin límite.          |

@@ -1,5 +1,7 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Limits } from './limits';
+import { deviceDir, DeviceInfo, listDevices, safeDeviceName } from './devices';
 import { Logger, silentLogger } from './logger';
 import {
   CopyOptions,
@@ -18,9 +20,10 @@ export interface SyncConfig {
   transport: Transport;
   /** `~/.claude/projects/<encoded workspace path>` on this device. */
   localDir: string;
-  /** Key of the project in the shared store: `<transport.root>/projects/<key>`. */
+  /** Key of the project in the shared store. */
   projectKey: string;
-  hostname: string;
+  /** This device's name: its own folder `devices/<name>/projects/<key>` is the only place a push writes to. */
+  deviceName: string;
   /** Push only: a pull takes everything the repository holds. */
   limits?: Limits;
   /** Clock for the age limit, injectable for tests. */
@@ -51,10 +54,15 @@ const MAX_PUSH_ATTEMPTS = 2;
 export class SyncService {
   private queue: Promise<unknown> = Promise.resolve();
 
+  /** The device folder this device exports to. */
+  readonly device: string;
+
   constructor(
     private readonly cfg: SyncConfig,
     private readonly log: Logger = silentLogger,
-  ) {}
+  ) {
+    this.device = safeDeviceName(cfg.deviceName);
+  }
 
   push(): Promise<SyncResult> {
     return this.exclusive(async () => {
@@ -63,10 +71,10 @@ export class SyncService {
       // A push can lose a race against another device: pull again and retry once.
       for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
         await this.cfg.transport.refresh();
-        last = copyTranscripts(this.cfg.localDir, this.remoteDir, filter);
+        last = copyTranscripts(this.cfg.localDir, this.dirOf(this.device), filter);
         try {
           const pushed = await this.cfg.transport.publish(
-            `sync ${this.cfg.hostname}: ${last.copied.length} session(s)`,
+            `sync ${this.device}: ${last.copied.length} session(s)`,
             last.copied.length,
           );
           this.log.info(
@@ -89,35 +97,71 @@ export class SyncService {
     });
   }
 
-  /** What the shared store holds for this project, newest first, so the user can choose what to pull. */
-  available(): Promise<AvailableSession[]> {
+  /** Devices that have exported this project, so the user can choose where to import from. */
+  devices(): Promise<DeviceInfo[]> {
     return this.exclusive(async () => {
       await this.cfg.transport.refresh();
-      return listSessions(this.remoteDir).map((s) => ({
+      return listDevices(this.cfg.transport.root, this.cfg.projectKey);
+    });
+  }
+
+  /** What `from` (a device name) holds for this project, newest first, so the user can choose what to pull. */
+  available(from: string): Promise<AvailableSession[]> {
+    return this.exclusive(async () => {
+      await this.cfg.transport.refresh();
+      const dir = this.dirOf(from);
+      return listSessions(dir).map((s) => ({
         ...s,
-        status: sessionStatus(
-          path.join(this.remoteDir, `${s.id}.jsonl`),
-          path.join(this.cfg.localDir, `${s.id}.jsonl`),
-        ),
+        status: sessionStatus(path.join(dir, `${s.id}.jsonl`), path.join(this.cfg.localDir, `${s.id}.jsonl`)),
       }));
     });
   }
 
-  /** Pulls everything, or only the sessions with these ids. */
-  pull(ids?: readonly string[]): Promise<SyncResult> {
+  /** Pulls everything `from` holds, or only the sessions with these ids. */
+  pull(from: string, ids?: readonly string[]): Promise<SyncResult> {
     return this.exclusive(async () => {
       await this.cfg.transport.refresh();
       const only = ids && new Set(ids.map((id) => `${id}.jsonl`));
-      const r = copyTranscripts(this.remoteDir, this.cfg.localDir, only ? { only } : {});
+      const r = copyTranscripts(this.dirOf(from), this.cfg.localDir, only ? { only } : {});
       this.log.info(
-        `pull: ${r.copied.length} copied, ${r.conflicts.length} conflicts, ${r.notDownloaded} not downloaded`,
+        `pull from ${from}: ${r.copied.length} copied, ${r.conflicts.length} conflicts, ${r.notDownloaded} not downloaded`,
       );
       return { copied: r.copied, conflicts: r.conflicts, tooLarge: [], tooOld: 0, notDownloaded: r.notDownloaded };
     });
   }
 
-  private get remoteDir(): string {
-    return path.join(this.cfg.transport.root, 'projects', this.cfg.projectKey);
+  /**
+   * Deletes one device's exported sessions of THIS project from the store, and nothing else: not the other
+   * projects of that device, not the store itself, and never a path that leaves it. Local sessions are untouched.
+   */
+  removeDevice(device: string): Promise<{ removed: number; published: boolean }> {
+    return this.exclusive(async () => {
+      await this.cfg.transport.refresh();
+      const root = this.cfg.transport.root;
+      const dir = this.dirOf(device);
+      const rel = path.relative(root, dir);
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel))
+        throw new Error('Refusing to delete outside the store.');
+      if (!fs.existsSync(dir)) return { removed: 0, published: false };
+      const removed = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')).length;
+      fs.rmSync(dir, { recursive: true });
+      // Tidy the folders this left empty, up to (not including) `devices` / `projects` / the store itself.
+      const keep = new Set([root, path.join(root, 'devices'), path.join(root, 'projects')]);
+      for (let p = path.dirname(dir); !keep.has(p); p = path.dirname(p)) {
+        try {
+          fs.rmdirSync(p); // fails when something is still inside: then it stays
+        } catch {
+          break;
+        }
+      }
+      const published = await this.cfg.transport.publish(`remove ${device}: ${removed} session(s)`, removed);
+      this.log.info(`removed ${device}: ${removed} session(s), published=${published}`);
+      return { removed, published };
+    });
+  }
+
+  private dirOf(device: string): string {
+    return deviceDir(this.cfg.transport.root, this.cfg.projectKey, device);
   }
 
   /** The age cut-off is fixed once per push, so a retry after a lost race uses the same one. */

@@ -20,14 +20,17 @@
 
 1. 安装扩展并打开**同一个项目**（相同的 git remote）。
 2. 运行 **Claude Sync: Pull sessions**，并选择相同的方式。
-3. 会出现存储中的会话列表：标题、日期、大小和状态。勾选需要的会话，或点击“Select all”。
-4. 运行 **Claude Sync: Resume a session**，选择一个会话，终端会打开并执行 `claude --resume`。
+3. 选择**从哪台设备**导入（如果只有一台其他设备导出过，则自动跳过）。
+4. 会出现该设备的会话列表：标题、日期、大小和状态。勾选需要的会话，或点击“Select all”。
+5. 运行 **Claude Sync: Resume a session**，选择一个会话，终端会打开并执行 `claude --resume`。
 
 ### 使用建议
 
 - **离开设备前先 Push，在另一台设备开始前先 Pull。**
 - 不要在两台设备上同时继续同一个会话：扩展会提示冲突，并且不会覆盖任何内容。
 - 云服务不会立即送达文件：如果 Pull 没有找到内容，请等一分钟再试。
+- 每台设备导出到各自的文件夹（以设备命名，见 `claudeSessionSync.deviceName`），因此设备之间不会互相覆盖，来源由你自己选择。
+- 删除某台设备导出的内容：**Claude Sync: Delete exported sessions**（会要求确认；你设备上的会话不会被触及）。
 - 随时可更改方式：**Claude Sync: Choose sync method**。断开云存储：**Claude Sync: Disconnect storage**（不会删除存储或本机中的任何内容）。
 
 ## 同步方式
@@ -42,12 +45,13 @@
 
 所有设置按机器生效：请在用户设置（User settings）中配置。
 
-| 设置                                  | 默认值 | 作用                                                          |
-| ------------------------------------- | ------ | ------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | 空     | `github`、`folder`（云存储）或 `git`。为空 = 首次使用时询问。 |
-| `claudeSessionSync.repoUrl`           | 空     | “自己的 git”方式所用私有仓库的地址。                          |
-| `claudeSessionSync.maxFileSizeMB`     | `90`   | 大于此值的会话不会被推送（并会给出提示）。                    |
-| `claudeSessionSync.maxSessionAgeDays` | `30`   | 仅推送最近 N 天内修改过的会话。`0` = 不限制。                 |
+| 设置                                  | 默认值   | 作用                                                          |
+| ------------------------------------- | -------- | ------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | 空       | `github`、`folder`（云存储）或 `git`。为空 = 首次使用时询问。 |
+| `claudeSessionSync.deviceName`        | 计算机名 | 此设备在存储中的名称：其他设备导入时选择它。                  |
+| `claudeSessionSync.repoUrl`           | 空       | “自己的 git”方式所用私有仓库的地址。                          |
+| `claudeSessionSync.maxFileSizeMB`     | `90`     | 大于此值的会话不会被推送（并会给出提示）。                    |
+| `claudeSessionSync.maxSessionAgeDays` | `30`     | 仅推送最近 N 天内修改过的会话。`0` = 不限制。                 |
 
 ## 安全
 

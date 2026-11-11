@@ -2,7 +2,7 @@
   "name": "claude-session-sync",
   "displayName": "Session Sync for Claude Code",
   "description": "Continue a Claude Code session on another device. Sync your session history through GitHub, iCloud Drive, Dropbox, OneDrive, Google Drive and more, and choose which sessions to bring over.",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "publisher": "tkhmelovskyi",
   "icon": "images/icon.png",
   "repository": {
@@ -58,6 +58,11 @@
         "category": "Claude Sync"
       },
       {
+        "command": "claudeSessionSync.deleteExport",
+        "title": "Delete exported sessions",
+        "category": "Claude Sync"
+      },
+      {
         "command": "claudeSessionSync.disconnect",
         "title": "Disconnect storage",
         "category": "Claude Sync"
@@ -94,6 +99,12 @@
           "default": "",
           "scope": "machine",
           "markdownDescription": "Cloud-storage method: the folder that holds the sessions. Filled in when you pick a storage on first use; you can also set any synced folder by hand."
+        },
+        "claudeSessionSync.deviceName": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Name of this device in the storage: its sessions are exported to their own folder under this name, and other devices choose it when importing. Empty = the computer's host name."
         },
         "claudeSessionSync.repoUrl": {
           "type": "string",

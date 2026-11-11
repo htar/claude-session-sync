@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+- Each device now exports to its own folder (`devices/<device name>/…`, name from the new `claudeSessionSync.deviceName`
+  setting, default the host name). Pushes from different devices no longer touch the same files.
+- Pull asks which device to import from, then which of its sessions. Sessions pushed by older versions are offered as
+  «Shared (before 0.5.0)».
+- New command «Delete exported sessions»: removes one device's stored sessions of the current project (with a
+  confirmation; never your local sessions, other projects or the store itself).
+
 ## 0.4.2
 
 - New command «Disconnect storage»: forgets the chosen method and storage (nothing is deleted from the storage or from

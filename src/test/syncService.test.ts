@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { SyncConfig, SyncService } from '../core/syncService';
+import { FolderTransport, GitTransport } from '../core/transport';
 import { bareRepo, read, tmp, touch, userLine, write } from './helpers';
 
 /** One "device": its own ~/.claude project dir and its own clone, sharing the bare remote. */
@@ -10,10 +12,9 @@ function device(remote: string, name: string, extra: Partial<SyncConfig> = {}) {
   const repoDir = path.join(root, 'repo');
   const localDir = path.join(root, 'claude-project');
   const service = new SyncService({
-    repoUrl: remote,
-    repoDir,
+    transport: new GitTransport(repoDir, remote),
     localDir,
-    remoteDir: path.join(repoDir, 'projects', 'k'),
+    projectKey: 'k',
     hostname: name,
     ...extra,
   });
@@ -121,4 +122,73 @@ test('the push limits do not apply to a pull', async () => {
   const r = await desktop.service.pull();
   assert.deepEqual(r.copied, ['big.jsonl']);
   assert.equal(r.tooOld, 0);
+});
+
+/** Two devices that share one folder, as iCloud Drive or Dropbox would present it. */
+function folderDevice(shared: string, name: string) {
+  const localDir = path.join(tmp(), 'claude-project');
+  return {
+    service: new SyncService({ transport: new FolderTransport(shared), localDir, projectKey: 'k', hostname: name }),
+    localDir,
+  };
+}
+
+test('folder mode: a session pushed to a shared folder is pulled on another device', async () => {
+  const shared = tmp();
+  const [laptop, desktop] = [folderDevice(shared, 'laptop'), folderDevice(shared, 'desktop')];
+  write(laptop.localDir, 's.jsonl', userLine('via cloud'));
+  assert.equal((await laptop.service.push()).pushed, true);
+  assert.equal((await laptop.service.push()).pushed, false);
+  assert.deepEqual((await desktop.service.pull()).copied, ['s.jsonl']);
+  assert.equal(read(desktop.localDir, 's.jsonl'), userLine('via cloud'));
+});
+
+test('folder mode: a diverged session is a conflict and is not overwritten', async () => {
+  const shared = tmp();
+  const [laptop, desktop] = [folderDevice(shared, 'laptop'), folderDevice(shared, 'desktop')];
+  write(laptop.localDir, 's.jsonl', userLine('base'));
+  await laptop.service.push();
+  await desktop.service.pull();
+  write(laptop.localDir, 's.jsonl', userLine('base') + userLine('laptop'));
+  write(desktop.localDir, 's.jsonl', userLine('base') + userLine('desktop!'));
+  await laptop.service.push();
+  assert.deepEqual((await desktop.service.push()).conflicts, ['s.jsonl']);
+});
+
+test('folder mode: a missing folder is an error, not a silently created one', async () => {
+  const d = folderDevice(path.join(tmp(), 'gone'), 'laptop');
+  await assert.rejects(d.service.pull(), /Sync folder not found/);
+});
+
+test('folder mode: sessions iCloud has not downloaded yet are counted, not silently missed', async () => {
+  const shared = tmp();
+  write(path.join(shared, 'projects', 'k'), '.evicted-1.jsonl.icloud', 'stub');
+  write(path.join(shared, 'projects', 'k'), 'here.jsonl', userLine('present'));
+  const d = folderDevice(shared, 'desktop');
+  const r = await d.service.pull();
+  assert.deepEqual(r.copied, ['here.jsonl']);
+  assert.equal(r.notDownloaded, 1);
+});
+
+test('available() lists what the store holds with what a pull would do; pull(ids) takes only the chosen ones', async () => {
+  const shared = tmp();
+  const [laptop, desktop] = [folderDevice(shared, 'laptop'), folderDevice(shared, 'desktop')];
+  write(laptop.localDir, 'a.jsonl', userLine('alpha'));
+  write(laptop.localDir, 'b.jsonl', userLine('beta'));
+  write(laptop.localDir, 'c.jsonl', userLine('gamma'));
+  await laptop.service.push();
+  await desktop.service.pull(['c']);
+  write(laptop.localDir, 'c.jsonl', userLine('gamma') + userLine('more'));
+  await laptop.service.push();
+
+  const list = await desktop.service.available();
+  assert.deepEqual(list.map((s) => [s.id, s.status]).sort(), [
+    ['a', 'new'],
+    ['b', 'new'],
+    ['c', 'updated'],
+  ]);
+  const r = await desktop.service.pull(['b']);
+  assert.deepEqual(r.copied, ['b.jsonl']);
+  assert.equal(fs.existsSync(path.join(desktop.localDir, 'a.jsonl')), false);
+  assert.equal((await desktop.service.available()).find((s) => s.id === 'b')?.status, 'same');
 });

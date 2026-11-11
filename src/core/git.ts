@@ -17,28 +17,31 @@ export function isValidRepoUrl(url: string): boolean {
   return !url.startsWith('-') && REPO_URL.test(url);
 }
 
-export async function git(cwd: string, args: string[]): Promise<string> {
+/** `extraEnv` carries credentials (never on the command line, where `ps` would show them). */
+export type GitEnv = Record<string, string>;
+
+export async function git(cwd: string, args: string[], extraEnv: GitEnv = {}): Promise<string> {
   const { stdout } = await run('git', [...SAFE_FLAGS, ...args], {
     cwd,
-    env: SAFE_ENV,
+    env: { ...SAFE_ENV, ...extraEnv },
     timeout: TIMEOUT_MS,
     maxBuffer: 16 * 1024 * 1024,
   });
   return stdout.trim();
 }
 
-const succeeds = (cwd: string, args: string[]) =>
-  git(cwd, args).then(
+const succeeds = (cwd: string, args: string[], env?: GitEnv) =>
+  git(cwd, args, env).then(
     () => true,
     () => false,
   );
 
 /** Clones on first use; afterwards makes sure the remote matches the setting. */
-export async function ensureClone(repoDir: string, url: string): Promise<void> {
+export async function ensureClone(repoDir: string, url: string, env?: GitEnv): Promise<void> {
   if (!isValidRepoUrl(url)) throw new Error(`Unsupported repository URL: ${url}`);
   if (!fs.existsSync(path.join(repoDir, '.git'))) {
     fs.mkdirSync(repoDir, { recursive: true });
-    await git(repoDir, ['clone', '--', url, '.']);
+    await git(repoDir, ['clone', '--', url, '.'], env);
     return;
   }
   if ((await git(repoDir, ['remote', 'get-url', 'origin'])) !== url) {
@@ -47,15 +50,15 @@ export async function ensureClone(repoDir: string, url: string): Promise<void> {
 }
 
 /** Brings the clone up to date, including the case where it was cloned empty and the remote got its first branch later. */
-export async function pullRepo(repoDir: string): Promise<void> {
+export async function pullRepo(repoDir: string, env?: GitEnv): Promise<void> {
   if (await succeeds(repoDir, ['rev-parse', '--verify', 'HEAD'])) {
-    await git(repoDir, ['pull', '--rebase', '--autostash']);
+    await git(repoDir, ['pull', '--rebase', '--autostash'], env);
     return;
   }
-  const head = await git(repoDir, ['ls-remote', '--symref', 'origin', 'HEAD']);
+  const head = await git(repoDir, ['ls-remote', '--symref', 'origin', 'HEAD'], env);
   const branch = head.match(/^ref: refs\/heads\/(\S+)\s+HEAD/m)?.[1];
   if (!branch) return; // The remote is still empty: nothing to pull.
-  await git(repoDir, ['fetch', 'origin']);
+  await git(repoDir, ['fetch', 'origin'], env);
   await git(repoDir, ['checkout', '-B', branch, `origin/${branch}`]);
 }
 
@@ -68,11 +71,11 @@ async function identityArgs(repoDir: string): Promise<string[]> {
 }
 
 /** Returns false when there was nothing to commit. */
-export async function commitAndPush(repoDir: string, message: string): Promise<boolean> {
+export async function commitAndPush(repoDir: string, message: string, env?: GitEnv): Promise<boolean> {
   await git(repoDir, ['add', '-A']);
   if (!(await git(repoDir, ['status', '--porcelain']))) return false;
   await git(repoDir, [...(await identityArgs(repoDir)), 'commit', '-m', message]);
-  await git(repoDir, ['push', '-u', 'origin', 'HEAD']);
+  await git(repoDir, ['push', '-u', 'origin', 'HEAD'], env);
   return true;
 }
 

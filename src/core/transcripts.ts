@@ -3,6 +3,8 @@ import * as path from 'node:path';
 
 /** Only files named like a Claude session id are ever touched (also guards against hostile remote content). */
 const SESSION_FILE = /^[0-9a-zA-Z-]+\.jsonl$/;
+/** What iCloud Drive leaves instead of a file it has evicted to save space. */
+const ICLOUD_PLACEHOLDER = /^\.[0-9a-zA-Z-]+\.jsonl\.icloud$/;
 const CHUNK = 64 * 1024;
 /** A transcript can be 50+ MB and the picker lists all of them: the title is looked for in the head only. */
 const TITLE_SCAN_BYTES = 4 * 1024 * 1024;
@@ -14,6 +16,8 @@ export interface CopyOptions {
   maxBytes?: number;
   /** Files last modified before this time (ms since epoch) are left out and only counted in `tooOld`. */
   modifiedAfterMs?: number;
+  /** Copy only these file names (`<id>.jsonl`); everything else is left alone and not counted. */
+  only?: ReadonlySet<string>;
 }
 
 export interface CopyResult {
@@ -26,6 +30,8 @@ export interface CopyResult {
   tooLarge: string[];
   /** Number of files older than `modifiedAfterMs`: the long tail of history, left out without a list. */
   tooOld: number;
+  /** iCloud placeholders (`.<name>.icloud`): the file exists in the folder but has not been downloaded yet. */
+  notDownloaded: number;
 }
 
 /** True when the whole of `shorter` is the beginning of `longer` — i.e. `longer` is the same transcript, extended. */
@@ -51,7 +57,8 @@ export function isPrefix(shorter: string, longer: string): boolean {
 }
 
 function atomicCopy(from: string, to: string): void {
-  const tmp = `${to}.tmp-${process.pid}`;
+  // Hidden, so a cloud-synced folder never shows a half-written file under a real session name.
+  const tmp = path.join(path.dirname(to), `.${path.basename(to)}.tmp-${process.pid}`);
   fs.copyFileSync(from, tmp);
   fs.renameSync(tmp, to);
 }
@@ -62,11 +69,12 @@ function atomicCopy(from: string, to: string): void {
  * An old file is left out before it is looked at, so a huge old session is not reported as too large.
  */
 export function copyTranscripts(src: string, dst: string, options: CopyOptions = {}): CopyResult {
-  const result: CopyResult = { copied: [], skipped: [], conflicts: [], tooLarge: [], tooOld: 0 };
+  const result: CopyResult = { copied: [], skipped: [], conflicts: [], tooLarge: [], tooOld: 0, notDownloaded: 0 };
   if (!fs.existsSync(src)) return result;
   fs.mkdirSync(dst, { recursive: true });
   for (const name of fs.readdirSync(src)) {
-    if (!SESSION_FILE.test(name)) continue;
+    if (ICLOUD_PLACEHOLDER.test(name)) result.notDownloaded++;
+    if (!SESSION_FILE.test(name) || (options.only && !options.only.has(name))) continue;
     const from = path.join(src, name);
     const to = path.join(dst, name);
     const stat = fs.statSync(from);
@@ -90,8 +98,19 @@ export function copyTranscripts(src: string, dst: string, options: CopyOptions =
   return result;
 }
 
+export type SessionStatus = 'new' | 'updated' | 'same' | 'conflict';
+
+/** What copying `from` onto `to` would do: the same decision `copyTranscripts` makes, without doing it. */
+export function sessionStatus(from: string, to: string): SessionStatus {
+  if (!fs.existsSync(to)) return 'new';
+  if (fs.statSync(from).size > fs.statSync(to).size && isPrefix(to, from)) return 'updated';
+  return isPrefix(from, to) ? 'same' : 'conflict';
+}
+
 export interface SessionInfo {
   id: string;
+  /** Size of the transcript in bytes. */
+  bytes: number;
   title: string;
   /** Time (ms since epoch) of the newest entry in the transcript. */
   lastActivity: number;
@@ -192,7 +211,12 @@ export function listSessions(dir: string): SessionInfo[] {
     const file = path.join(dir, name);
     const stat = fs.statSync(file);
     if (stat.size === 0) continue; // an empty file is not a session worth resuming
-    out.push({ id: name.slice(0, -'.jsonl'.length), title: readTitle(file), lastActivity: lastActivity(file, stat) });
+    out.push({
+      id: name.slice(0, -'.jsonl'.length),
+      bytes: stat.size,
+      title: readTitle(file),
+      lastActivity: lastActivity(file, stat),
+    });
   }
   return out.sort((a, b) => b.lastActivity - a.lastActivity);
 }

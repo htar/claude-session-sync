@@ -2,7 +2,7 @@
   "name": "claude-session-sync",
   "displayName": "Session Sync for Claude Code",
   "description": "Continue a Claude Code session on another device: syncs transcripts through your own private git repository.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "tkhmelovskyi",
   "icon": "images/icon.png",
   "repository": {
@@ -48,6 +48,11 @@
         "category": "Claude Sync"
       },
       {
+        "command": "claudeSessionSync.chooseMode",
+        "title": "Choose sync method",
+        "category": "Claude Sync"
+      },
+      {
         "command": "claudeSessionSync.resume",
         "title": "Resume a session",
         "category": "Claude Sync"
@@ -56,11 +61,35 @@
     "configuration": {
       "title": "Session Sync for Claude Code",
       "properties": {
+        "claudeSessionSync.mode": {
+          "type": "string",
+          "enum": [
+            "",
+            "github",
+            "folder",
+            "git"
+          ],
+          "enumDescriptions": [
+            "Ask on first use.",
+            "Sign in with GitHub; a private claude-sessions repository is created automatically.",
+            "Cloud storage: iCloud Drive, Dropbox, OneDrive, Google Drive, MEGA, pCloud, Box, Proton Drive, Nextcloud or any synced folder.",
+            "Your own private git repository (claudeSessionSync.repoUrl)."
+          ],
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "How sessions travel between devices. Use **Claude Sync: Choose sync method** to change it."
+        },
+        "claudeSessionSync.syncFolder": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Cloud-storage method: the folder that holds the sessions. Filled in when you pick a storage on first use; you can also set any synced folder by hand."
+        },
         "claudeSessionSync.repoUrl": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "URL of a **private** git repository that stores the transcripts (`https://…`, `ssh://…` or `git@host:owner/repo.git`)."
+          "markdownDescription": "Own-git method: URL of a **private** git repository that stores the transcripts (`https://…`, `ssh://…` or `git@host:owner/repo.git`)."
         },
         "claudeSessionSync.claudeDir": {
           "type": "string",

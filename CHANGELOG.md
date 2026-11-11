@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0
+
+- Three ways to sync, chosen on first use (and changeable with «Choose sync method»): GitHub with a private
+  `claude-sessions` repository created automatically after the editor's GitHub sign-in, cloud storage (iCloud Drive, Dropbox, OneDrive,
+  Google Drive, MEGA, pCloud, Box, Proton Drive, Nextcloud or any synced folder: you pick the storage and a «Claude Sessions» folder is created at its root; the folder is asked for only when the
+  storage is not in its usual place), or your own git repository (as before).
+- Pull now shows what the storage holds (title, date, size, new / newer / differs) and takes only the sessions you tick; a
+  «select all» button pulls everything.
+- A public repository named `claude-sessions` is refused.
+- iCloud sessions that are not downloaded yet are reported instead of silently missed.
+- Temporary files are hidden while a copy is in progress, so a cloud client never shows half a session.
+
 ## 0.3.0
 
 - First Marketplace release: publisher `tkhmelovskyi`, icon, repository links, renamed to «Session Sync for Claude Code».

@@ -1,7 +1,7 @@
 {
   "name": "claude-session-sync",
   "displayName": "Session Sync for Claude Code",
-  "description": "Continue a Claude Code session on another device: syncs transcripts through your own private git repository.",
+  "description": "Continue a Claude Code session on another device. Sync your session history through GitHub, iCloud Drive, Dropbox, OneDrive, Google Drive and more, and choose which sessions to bring over.",
   "version": "0.4.0",
   "publisher": "tkhmelovskyi",
   "icon": "images/icon.png",
@@ -24,7 +24,12 @@
     "claude",
     "claude code",
     "sync",
-    "sessions"
+    "sessions",
+    "icloud",
+    "dropbox",
+    "onedrive",
+    "google drive",
+    "github"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [],

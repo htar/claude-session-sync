@@ -1,9 +1,18 @@
 {
   "name": "claude-session-sync",
-  "displayName": "Claude Session Sync",
+  "displayName": "Session Sync for Claude Code",
   "description": "Continue a Claude Code session on another device: syncs transcripts through your own private git repository.",
-  "version": "0.2.0",
-  "publisher": "local",
+  "version": "0.3.0",
+  "publisher": "tkhmelovskyi",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/htar/claude-session-sync.git"
+  },
+  "homepage": "https://github.com/htar/claude-session-sync#readme",
+  "bugs": {
+    "url": "https://github.com/htar/claude-session-sync/issues"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
@@ -45,7 +54,7 @@
       }
     ],
     "configuration": {
-      "title": "Claude Session Sync",
+      "title": "Session Sync for Claude Code",
       "properties": {
         "claudeSessionSync.repoUrl": {
           "type": "string",
@@ -85,7 +94,7 @@
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "tsc -p tsconfig.test.json && node --test out/test/*.test.js",
     "check": "npm run typecheck && npm run lint && npm test",
-    "package": "npm run build:prod && vsce package --allow-missing-repository --skip-license"
+    "package": "npm run build:prod && vsce package"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

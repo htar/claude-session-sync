@@ -1,4 +1,6 @@
-# Claude Session Sync
+# Session Sync for Claude Code
+
+> Unofficial community extension. Not affiliated with or endorsed by Anthropic. «Claude» and «Claude Code» are trademarks of Anthropic.
 
 Продовжуйте сесію Claude Code на іншому пристрої. Розширення синхронізує транскрипти сесій
 (`~/.claude/projects/<проєкт>/<id>.jsonl`) через **ваш власний приватний git-репозиторій**.

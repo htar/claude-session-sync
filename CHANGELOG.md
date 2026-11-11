@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- First Marketplace release: publisher `tkhmelovskyi`, icon, repository links, renamed to «Session Sync for Claude Code».
+
 ## 0.2.0
 
 - Push limits: `claudeSessionSync.maxFileSizeMB` (default 90) leaves out sessions GitHub would reject and reports them,

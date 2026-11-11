@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Documentation: the README is now in English, with Ukrainian, Spanish and Simplified Chinese versions on GitHub and a
+  language switcher at the top.
+
 ## 0.4.0
 
 - Three ways to sync, chosen on first use (and changeable with «Choose sync method»): GitHub with a private

@@ -29,7 +29,7 @@ Los comandos están en la Paleta de comandos: **Cmd+Shift+P** (Windows y Linux: 
 - **Haz Push antes de dejar un dispositivo y Pull antes de empezar en otro.**
 - No continúes una misma sesión en dos dispositivos a la vez: la extensión avisa del conflicto y no sobrescribe nada.
 - Un servicio en la nube no entrega los archivos al instante: si Pull no encuentra nada, espera un minuto e inténtalo de nuevo.
-- Cambia el método cuando quieras: **Claude Sync: Choose sync method**.
+- Cambia el método cuando quieras: **Claude Sync: Choose sync method**. Para desconectar la nube: **Claude Sync: Disconnect storage** (no se borra nada del almacenamiento ni del dispositivo).
 
 ## Formas de sincronizar
 

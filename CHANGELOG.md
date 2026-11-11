@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2
+
+- New command «Disconnect storage»: forgets the chosen method and storage (nothing is deleted from the storage or from
+  this device).
+- «Choose sync method» now really starts clean: the previous cloud folder is forgotten and the storage is asked for
+  right away.
+- Every Push and Pull message says where the sessions went, with a «Change method» button.
+
 ## 0.4.1
 
 - Documentation: the README is now in English, with Ukrainian, Spanish and Simplified Chinese versions on GitHub and a

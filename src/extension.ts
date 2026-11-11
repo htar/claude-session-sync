@@ -26,6 +26,8 @@ interface Session {
   localDir: string;
   folder: string;
   limits: Limits;
+  /** Where the sessions go, for messages: «GitHub», the cloud folder or the repository address. */
+  where: string;
 }
 
 type Mode = 'github' | 'folder' | 'git';
@@ -60,7 +62,18 @@ async function chooseMode(cfg: vscode.WorkspaceConfiguration, forceAsk: boolean)
   });
   if (!pick) return undefined;
   await cfg.update('mode', pick.mode, vscode.ConfigurationTarget.Global);
+  // A new choice starts clean: the folder of the previous cloud storage must not be reused.
+  if (forceAsk) await cfg.update('syncFolder', '', vscode.ConfigurationTarget.Global);
   return pick.mode;
+}
+
+/** Human-readable place of the saved method, for messages. */
+function describeMethod(cfg: vscode.WorkspaceConfiguration): string {
+  const mode = cfg.get<string>('mode');
+  if (mode === 'github') return 'GitHub (private claude-sessions repository)';
+  if (mode === 'folder') return cfg.get<string>('syncFolder', '') || 'a cloud folder';
+  if (mode === 'git') return cfg.get<string>('repoUrl', '') || 'your git repository';
+  return 'nowhere yet';
 }
 
 async function githubTransport(context: vscode.ExtensionContext): Promise<Transport> {
@@ -155,7 +168,7 @@ async function openSession(context: vscode.ExtensionContext, log: Logger): Promi
     maxSessionAgeDays: cfg.get('maxSessionAgeDays'),
   });
   const service = new SyncService({ transport, localDir, projectKey: key, hostname: os.hostname(), limits }, log);
-  return { service, localDir, folder, limits };
+  return { service, localDir, folder, limits, where: describeMethod(vscode.workspace.getConfiguration(SECTION)) };
 }
 
 async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boolean> {
@@ -169,13 +182,19 @@ async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boole
   return Boolean(ok);
 }
 
-function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits): void {
+const CHANGE_METHOD = 'Change method';
+
+function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: string): void {
   const older = r.tooOld > 0 ? ` ${r.tooOld} older than ${limits.maxAgeDays} days left out.` : '';
-  void vscode.window.showInformationMessage(
-    r.pushed === false
-      ? `Claude Sync: nothing new to ${verb}.${older}`
-      : `Claude Sync: ${verb}ed ${r.copied.length} session(s).${older}`,
-  );
+  const via = `${verb === 'push' ? 'to' : 'from'} ${where}`;
+  void vscode.window
+    .showInformationMessage(
+      r.pushed === false
+        ? `Claude Sync: nothing new to ${verb} ${via}.${older}`
+        : `Claude Sync: ${verb}ed ${r.copied.length} session(s) ${via}.${older}`,
+      CHANGE_METHOD,
+    )
+    .then((pick) => (pick ? vscode.commands.executeCommand(`${SECTION}.chooseMode`) : undefined));
   if (r.tooLarge.length) {
     void vscode.window.showWarningMessage(
       `Claude Sync: ${r.tooLarge.length} session(s) are over ${Math.round(limits.maxFileBytes / MB)} MB and were NOT pushed: ${r.tooLarge.join(', ')}`,
@@ -267,18 +286,45 @@ export function activate(context: vscode.ExtensionContext): void {
     command(
       'push',
       async (s) => {
-        report('push', await progress('Claude Sync: pushing…', () => s.service.push()), s.limits);
+        report('push', await progress('Claude Sync: pushing…', () => s.service.push()), s.limits, s.where);
       },
       () => confirmFirstPush(context),
     ),
     vscode.commands.registerCommand(`${SECTION}.chooseMode`, async () => {
-      const mode = await chooseMode(vscode.workspace.getConfiguration(SECTION), true);
-      if (mode) void vscode.window.showInformationMessage(`Claude Sync: method set to ${mode}.`);
+      const cfg = vscode.workspace.getConfiguration(SECTION);
+      const mode = await chooseMode(cfg, true);
+      if (!mode) return;
+      // Cloud storage needs its storage picked right away, so the next Push does not ask again.
+      if (mode === 'folder' && !(await folderTransport(cfg))) return;
+      void vscode.window.showInformationMessage(
+        `Claude Sync: now using ${describeMethod(vscode.workspace.getConfiguration(SECTION))}.`,
+      );
+    }),
+    vscode.commands.registerCommand(`${SECTION}.disconnect`, async () => {
+      const cfg = vscode.workspace.getConfiguration(SECTION);
+      const mode = cfg.get<string>('mode');
+      if (!isMode(mode)) {
+        void vscode.window.showInformationMessage('Claude Sync: nothing is connected.');
+        return;
+      }
+      const ok = await vscode.window.showWarningMessage(
+        `Disconnect from ${describeMethod(cfg)}? Sessions already stored there and on this device are left untouched.`,
+        { modal: true },
+        'Disconnect',
+      );
+      if (!ok) return;
+      await cfg.update('mode', '', vscode.ConfigurationTarget.Global);
+      await cfg.update('syncFolder', '', vscode.ConfigurationTarget.Global);
+      void vscode.window.showInformationMessage(
+        mode === 'github'
+          ? 'Claude Sync: disconnected. To also revoke GitHub access, sign out of GitHub in the Accounts menu.'
+          : 'Claude Sync: disconnected. The next Push or Pull will ask for a method again.',
+      );
     }),
     command('pull', async (s) => {
       const chosen = await chooseSessionsToPull(s.service);
       if (!chosen) return;
-      report('pull', await progress('Claude Sync: pulling…', () => s.service.pull(chosen)), s.limits);
+      report('pull', await progress('Claude Sync: pulling…', () => s.service.pull(chosen)), s.limits, s.where);
     }),
     command('resume', async (s) => {
       const sessions = listSessions(s.localDir);

@@ -28,7 +28,7 @@
 - **离开设备前先 Push，在另一台设备开始前先 Pull。**
 - 不要在两台设备上同时继续同一个会话：扩展会提示冲突，并且不会覆盖任何内容。
 - 云服务不会立即送达文件：如果 Pull 没有找到内容，请等一分钟再试。
-- 随时可更改方式：**Claude Sync: Choose sync method**。
+- 随时可更改方式：**Claude Sync: Choose sync method**。断开云存储：**Claude Sync: Disconnect storage**（不会删除存储或本机中的任何内容）。
 
 ## 同步方式
 

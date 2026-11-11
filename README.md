@@ -29,7 +29,7 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 - **Push before you leave a device, Pull before you start on another.**
 - Do not continue one session on two devices at once: the extension reports a conflict and overwrites nothing.
 - A cloud service does not deliver files instantly: if Pull finds nothing, wait a minute and try again.
-- Change the method any time: **Claude Sync: Choose sync method**.
+- Change the method any time: **Claude Sync: Choose sync method**. To forget it altogether: **Claude Sync: Disconnect storage** (nothing is deleted from the storage or from your device).
 
 ## Ways to sync
 

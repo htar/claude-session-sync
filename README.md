@@ -1,65 +1,67 @@
 # Session Sync for Claude Code
 
+**English** · [Українська](https://github.com/htar/claude-session-sync/blob/main/README.uk.md) · [Español](https://github.com/htar/claude-session-sync/blob/main/README.es.md) · [简体中文](https://github.com/htar/claude-session-sync/blob/main/README.zh-CN.md)
+
 > Unofficial community extension. Not affiliated with or endorsed by Anthropic. «Claude» and «Claude Code» are trademarks of Anthropic.
 
-Продовжуйте сесію Claude Code на іншому пристрої. Розширення переносить історію сесій між вашими комп'ютерами
-без власного сервера: дані ходять через те, чим ви вже користуєтесь.
+Continue a Claude Code session on another device. The extension moves your session history between your computers
+without a server of its own: the data travels through something you already use.
 
-## Як користуватися
+## How to use
 
-Команди відкриваються через палітру: **Cmd+Shift+P** (Windows і Linux: Ctrl+Shift+P), далі слово «Claude Sync».
+Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+Shift+P), then type "Claude Sync".
 
-### Пристрій, на якому працювали
+### On the device where you worked
 
-1. Відкрийте проєкт у VS Code.
-2. Виконайте **Claude Sync: Push sessions**.
-3. Перший раз виберіть спосіб переносу (див. нижче). Решту розширення зробить саме.
+1. Open the project in VS Code.
+2. Run **Claude Sync: Push sessions**.
+3. The first time, choose how sessions travel (see below). The extension does the rest.
 
-### Пристрій, на якому продовжуєте
+### On the device where you continue
 
-1. Встановіть розширення й відкрийте **той самий проєкт** (з тим самим git remote).
-2. Виконайте **Claude Sync: Pull sessions** і виберіть той самий спосіб.
-3. З'явиться список сесій зі сховища: назва, дата, розмір і статус. Відмітьте потрібні або натисніть «Select all».
-4. Виконайте **Claude Sync: Resume a session**, виберіть сесію, і відкриється термінал із `claude --resume`.
+1. Install the extension and open **the same project** (same git remote).
+2. Run **Claude Sync: Pull sessions** and choose the same method.
+3. A list of the sessions in the storage appears: title, date, size and status. Tick the ones you need, or press "Select all".
+4. Run **Claude Sync: Resume a session**, pick one, and a terminal opens with `claude --resume`.
 
-### Правила
+### Rules of thumb
 
-- **Push перед тим, як піти з пристрою, і Pull перед тим, як почати на іншому.**
-- Не продовжуйте одну сесію на двох пристроях одночасно: розширення покаже конфлікт і нічого не перезапише.
-- Хмара доставляє файли не миттєво: якщо Pull нічого не знайшов, зачекайте хвилину.
-- Змінити спосіб переносу: **Claude Sync: Choose sync method**.
+- **Push before you leave a device, Pull before you start on another.**
+- Do not continue one session on two devices at once: the extension reports a conflict and overwrites nothing.
+- A cloud service does not deliver files instantly: if Pull finds nothing, wait a minute and try again.
+- Change the method any time: **Claude Sync: Choose sync method**.
 
-## Способи переносу
+## Ways to sync
 
-| Спосіб                      | Що треба                                                                                     | Що відбувається                                                                                                             |
-| --------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **GitHub**                  | Акаунт GitHub                                                                                | Вхід в один клік через VS Code, приватний репозиторій `claude-sessions` створюється сам. Публічний такий відхиляється.      |
-| **Хмарне сховище**          | iCloud Drive, Dropbox, OneDrive, Google Drive, MEGA, pCloud, Box, Proton Drive або Nextcloud | Ви вибираєте сховище зі списку, у його корені створюється папка «Claude Sessions», а далі файли доставляє сам клієнт хмари. |
-| **Власний git-репозиторій** | Приватний репозиторій і доступ до нього (SSH або credential helper)                          | Вкажіть його адресу в `claudeSessionSync.repoUrl`.                                                                          |
+| Method                      | You need                                                                                    | What happens                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub**                  | A GitHub account                                                                            | One-click sign-in through VS Code; a private `claude-sessions` repository is created for you. A public one with that name is refused. |
+| **Cloud storage**           | iCloud Drive, Dropbox, OneDrive, Google Drive, MEGA, pCloud, Box, Proton Drive or Nextcloud | You pick the storage from a list, a "Claude Sessions" folder is created at its root, and the cloud client delivers the files.         |
+| **Your own git repository** | A private repository you can reach (SSH or a credential helper)                             | Put its address in `claudeSessionSync.repoUrl`.                                                                                       |
 
-## Налаштування
+## Settings
 
-Усі налаштування діють на рівні машини: задавайте їх у User settings.
+All settings apply per machine: set them in User settings.
 
-| Налаштування                          | За замовчуванням | Що робить                                                                                   |
-| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | порожньо         | `github`, `folder` (хмарне сховище) або `git`. Порожньо = спитати при першому використанні. |
-| `claudeSessionSync.repoUrl`           | порожньо         | Адреса приватного репозиторію для способу «власний git».                                    |
-| `claudeSessionSync.maxFileSizeMB`     | `90`             | Сесії більші за це не пушаться (і про них попереджають).                                    |
-| `claudeSessionSync.maxSessionAgeDays` | `30`             | Пушаться лише сесії, змінені за останні N днів. `0` = без обмеження.                        |
+| Setting                               | Default | What it does                                                              |
+| ------------------------------------- | ------- | ------------------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | empty   | `github`, `folder` (cloud storage) or `git`. Empty = ask on first use.    |
+| `claudeSessionSync.repoUrl`           | empty   | Address of the private repository for the "own git" method.               |
+| `claudeSessionSync.maxFileSizeMB`     | `90`    | Sessions larger than this are not pushed (and you are warned).            |
+| `claudeSessionSync.maxSessionAgeDays` | `30`    | Only sessions modified within the last N days are pushed. `0` = no limit. |
 
-## Безпека
+## Security
 
-- Сесії містять ваш код, вивід команд і **можливо секрети**. Переносьте їх лише у приватне сховище: приватний
-  репозиторій або вашу власну хмару. Перед першим Push розширення про це попереджає.
-- Спосіб GitHub просить дозвіл `repo` (вужчого для приватних репозиторіїв GitHub не має). Токен лишається у VS Code,
-  код розширення відкритий.
-- Якщо в iCloud увімкнено «Optimize Mac Storage», частина сесій може бути не завантажена на цей Mac. Розширення
-  покаже скільки, і підкаже, що зробити.
+- Sessions contain your code, command output and **possibly secrets**. Send them only to private storage: a private
+  repository or your own cloud. The extension warns you before the first Push.
+- The GitHub method asks for the `repo` permission (GitHub has nothing narrower for private repositories). The token
+  stays inside VS Code, and the extension's code is open.
+- With "Optimize Mac Storage" on in iCloud, some sessions may not be downloaded to this Mac yet. The extension tells
+  you how many and what to do.
 
-## Обмеження
+## Limitations
 
-- Синхронізуються сесії поточного проєкту (першої відкритої папки), а не всі одразу.
-- Синхронізація ручна, фонового режиму немає.
+- Sessions of the current project (the first opened folder) are synced, not all projects at once.
+- Syncing is manual; there is no background mode.
 
-Вихідний код і помилки: https://github.com/htar/claude-session-sync
+Source code and issues: https://github.com/htar/claude-session-sync

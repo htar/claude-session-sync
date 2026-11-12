@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.8.0
+
+- Dropbox and OneDrive: requests are retried when the service says «slow down» (429) or fails for a moment (5xx) and when
+  the connection drops. A refused sign-in offers «Sign in again» (it used to talk about a git repository).
+- Clear advice instead of raw errors: «cannot reach the storage» and «the storage is full», each with «Try again».
+- Two computers with the same device name are told apart: the second one is asked to rename or to confirm it is the
+  same computer, so sessions are never mixed.
+- Push with no local sessions says where it looked instead of «nothing new».
+- Only one operation runs at a time. A name from the network can never lead outside the local cache.
+- «Disconnect storage» removes the local copy the extension keeps. `CLAUDE_CONFIG_DIR` is honoured.
+- New setting `projectKey` for projects without a git remote or with different remotes.
+- Remote windows (SSH, WSL, containers): a warning before the browser sign-in; a missing keyring no longer breaks sign-in.
+
+## 0.7.1
+
+- First Pull or Push now asks where the sessions are (the method picker says which device it is for) instead of
+  failing, and when nothing is found it says where it looked and offers «Change method» / «Show log».
+- Progress is visible: the notification shows the step («Reading the file list…», «Downloading 3/12: …»,
+  «Uploading…») for Dropbox, OneDrive and git.
+- The result stays in the status bar («pulled 3 · 14:05») after the toast is gone. After a pull the message has
+  «Resume a session» and «Reload window» buttons, because the Claude Code session list may need a reload.
+
 ## 0.7.0
 
 - New method **OneDrive (direct)**: the same browser sign-in as Dropbox, through the Microsoft Graph API (the app folder

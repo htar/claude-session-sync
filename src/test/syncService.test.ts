@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { SyncConfig, SyncService } from '../core/syncService';
+import { DeviceNameTakenError, SyncConfig, SyncService } from '../core/syncService';
 import { LEGACY_SOURCE, listDevices, safeDeviceName } from '../core/devices';
 import { FolderTransport, GitTransport } from '../core/transport';
 import { bareRepo, read, tmp, touch, userLine, write } from './helpers';
@@ -258,4 +258,49 @@ test("removeDevice deletes only that device's folder of this project and tidies 
   assert.equal(fs.existsSync(path.join(shared, 'devices', 'desktop')), false);
   assert.equal(fs.existsSync(path.join(shared, 'devices')), true);
   assert.deepEqual(await desktop.service.removeDevice('desktop'), { removed: 0, published: false });
+});
+
+const withId = (store: string, local: string, deviceName: string, installId: string): SyncService =>
+  new SyncService({ transport: new FolderTransport(store), localDir: local, projectKey: 'p', deviceName, installId });
+
+test('two computers with the same device name are told apart: the second one is refused', async () => {
+  const store = tmp();
+  const a = tmp();
+  const b = tmp();
+  write(a, 's1.jsonl', userLine('a'));
+  write(b, 's2.jsonl', userLine('b'));
+  await withId(store, a, 'MacBook-Pro', 'id-A').push();
+  await withId(store, a, 'MacBook-Pro', 'id-A').push(); // the same computer again: fine
+  await assert.rejects(withId(store, b, 'MacBook-Pro', 'id-B').push(), DeviceNameTakenError);
+  assert.equal(fs.existsSync(path.join(store, 'devices', 'MacBook-Pro', 'projects', 'p', 's2.jsonl')), false);
+});
+
+test('a reinstalled editor can take its own device name over after confirming', async () => {
+  const store = tmp();
+  const a = tmp();
+  write(a, 's1.jsonl', userLine('a'));
+  await withId(store, a, 'laptop', 'old-id').push();
+  await assert.rejects(withId(store, a, 'laptop', 'new-id').push(), DeviceNameTakenError);
+  await withId(store, a, 'laptop', 'new-id').push({ takeOver: true });
+  await withId(store, a, 'laptop', 'new-id').push(); // now it owns the name
+});
+
+test('a folder without a marker (pushed by an older version) is claimed, not refused', async () => {
+  const store = tmp();
+  const a = tmp();
+  write(a, 's1.jsonl', userLine('a'));
+  write(path.join(store, 'devices', 'laptop', 'projects', 'p'), 's0.jsonl', userLine('old'));
+  await withId(store, a, 'laptop', 'id-A').push();
+  assert.ok(fs.existsSync(path.join(store, 'devices', 'laptop', 'device.json')));
+});
+
+test('removing the last export of a device removes its marker too, and the device disappears', async () => {
+  const store = tmp();
+  const a = tmp();
+  write(a, 's1.jsonl', userLine('a'));
+  const svc = withId(store, a, 'laptop', 'id-A');
+  await svc.push();
+  await svc.removeDevice('laptop');
+  assert.equal(fs.existsSync(path.join(store, 'devices', 'laptop')), false);
+  assert.deepEqual(await svc.devices(), []);
 });

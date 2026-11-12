@@ -28,6 +28,7 @@
 
 - **离开设备前先 Push，在另一台设备开始前先 Pull。**
 - 不要在两台设备上同时继续同一个会话：扩展会提示冲突，并且不会覆盖任何内容。
+- 拉取的会话可能不会立刻出现在 Claude Code 的会话列表中。请重新加载窗口（**Developer: Reload Window**），或使用 **Claude Sync: Resume a session** 直接打开它。
 - 云服务不会立即送达文件：如果 Pull 没有找到内容，请等一分钟再试。
 - 每台设备导出到各自的文件夹（以设备命名，见 `claudeSessionSync.deviceName`），因此设备之间不会互相覆盖，来源由你自己选择。
 - 删除某台设备导出的内容：**Claude Sync: Delete exported sessions**（会要求确认；你设备上的会话不会被触及）。
@@ -48,13 +49,27 @@
 
 所有设置按机器生效：请在用户设置（User settings）中配置。
 
-| 设置                                  | 默认值   | 作用                                                          |
-| ------------------------------------- | -------- | ------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | 空       | `github`、`folder`（云存储）或 `git`。为空 = 首次使用时询问。 |
-| `claudeSessionSync.deviceName`        | 计算机名 | 此设备在存储中的名称：其他设备导入时选择它。                  |
-| `claudeSessionSync.repoUrl`           | 空       | “自己的 git”方式所用私有仓库的地址。                          |
-| `claudeSessionSync.maxFileSizeMB`     | `90`     | 大于此值的会话不会被推送（并会给出提示）。                    |
-| `claudeSessionSync.maxSessionAgeDays` | `30`     | 仅推送最近 N 天内修改过的会话。`0` = 不限制。                 |
+| 设置                                  | 默认值   | 作用                                                                                                                |
+| ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | 空       | `github`、`folder`（云存储）或 `git`。为空 = 首次使用时询问。                                                       |
+| `claudeSessionSync.deviceName`        | 计算机名 | 此设备在存储中的名称：其他设备导入时选择它。                                                                        |
+| `claudeSessionSync.projectKey`        | 空       | 在所有设备上填写相同的值，用于匹配没有 git remote（或 remote 不同）的项目。空 = 使用 git remote，否则使用文件夹名。 |
+| `claudeSessionSync.repoUrl`           | 空       | “自己的 git”方式所用私有仓库的地址。                                                                                |
+| `claudeSessionSync.maxFileSizeMB`     | `90`     | 大于此值的会话不会被推送（并会给出提示）。                                                                          |
+| `claudeSessionSync.maxSessionAgeDays` | `30`     | 仅推送最近 N 天内修改过的会话。`0` = 不限制。                                                                       |
+
+## 出现问题时
+
+| 你看到的提示                                                             | 含义与处理                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| “cannot reach the storage”                                               | 没有网络或服务不可用。扩展已自动重试；恢复联网后点击“Try again”。        |
+| “the storage is full”                                                    | 在 Dropbox/OneDrive/GitHub 中释放空间，或改用其他方式。                  |
+| “did not accept the sign-in”                                             | 授权已过期或被撤销。点击“Sign in again”。                                |
+| “Another computer already pushes as …”                                   | 两台电脑的设备名相同。重命名本机（已提供选项），或确认它就是同一台电脑。 |
+| Pull 没有找到任何内容                                                    | 另一台设备尚未 Push，或使用了不同的方式或项目键（见 `projectKey`）。     |
+| 在远程窗口（SSH、WSL、容器、Codespaces）中 Dropbox/OneDrive 登录无法完成 | 浏览器无法连接到那里的 VS Code。请使用 GitHub 或你自己的 git 仓库。      |
+
+**Claude Sync: Disconnect storage** 还会删除扩展在本机为同步保留的副本；你自己的 Claude Code 会话不会被触碰。
 
 ## 安全
 

@@ -203,3 +203,33 @@ test('the loopback server stops waiting when cancelled', async () => {
   );
   await assert.rejects(code, /cancelled/);
 });
+
+test('the mirror reports what it is doing: reading, downloading n/m, uploading n/m, deleting n/m', async () => {
+  const dbx = new FakeDropbox();
+  const messages: string[] = [];
+  const client = new DropboxClient(dbx.fetch, tokenProvider(dbx.fetch, dropboxOAuth, 'good-refresh'));
+  const transport = new MirrorTransport(path.join(tmp(), 'cache'), client, (m) => messages.push(m));
+  const a = tmp();
+  write(a, 's1.jsonl', userLine('1'));
+  write(a, 's2.jsonl', userLine('2'));
+  const svc = new SyncService({ transport, localDir: a, projectKey: 'p', deviceName: 'd' });
+  await svc.push();
+  assert.ok(messages.includes('Reading the file list…'));
+  assert.ok(messages.some((m) => m.startsWith('Uploading 2/2: ')));
+
+  messages.length = 0;
+  const other = new MirrorTransport(path.join(tmp(), 'cache'), client, (m) => messages.push(m));
+  await other.refresh();
+  assert.ok(messages.some((m) => m.startsWith('Downloading 2/2: ')));
+});
+
+test('a file name from the network that points outside the cache is ignored', async () => {
+  const dbx = new FakeDropbox();
+  dbx.files.set('../evil.jsonl', Buffer.from('x'));
+  dbx.files.set('devices/ok/projects/p/s.jsonl', Buffer.from('y'));
+  const root = path.join(tmp(), 'cache');
+  const client = new DropboxClient(dbx.fetch, tokenProvider(dbx.fetch, dropboxOAuth, 'good-refresh'));
+  await new MirrorTransport(root, client).refresh();
+  assert.equal(fs.existsSync(path.join(root, '..', 'evil.jsonl')), false);
+  assert.ok(fs.existsSync(path.join(root, 'devices', 'ok', 'projects', 'p', 's.jsonl')));
+});

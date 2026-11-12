@@ -12,6 +12,16 @@ export function projectKey(remoteUrl: string | undefined, workspacePath: string)
   return (slug ?? path.basename(workspacePath)).replace(/[^a-zA-Z0-9._-]+/g, '_');
 }
 
-export function claudeProjectsDir(claudeDir: string): string {
-  return path.join(claudeDir || path.join(os.homedir(), '.claude'), 'projects');
+/** Claude Code's own folder: the setting, else `CLAUDE_CONFIG_DIR` (which Claude Code honours), else `~/.claude`. */
+export function claudeProjectsDir(claudeDir: string, env: NodeJS.ProcessEnv = process.env): string {
+  const base = claudeDir || env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  return path.join(base, 'projects');
+}
+
+/** A key typed by the user (for projects without a git remote or with different remotes): made safe for a folder name. */
+export function sanitizeProjectKey(raw: string): string {
+  return raw
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^[._]+/, '');
 }

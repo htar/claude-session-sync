@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
@@ -5,17 +7,44 @@ import { isValidRepoUrl, remoteOf } from './core/git';
 import { DeviceInfo } from './core/devices';
 import { ensureSyncFolder, STORAGES, storageRoots } from './core/storages';
 import { CLOUDS, CloudId, CloudProvider, isCloudId } from './core/cloud';
+import { classifyError } from './core/errors';
+import { retryingFetch } from './core/http';
 import { signIn, tokenProvider } from './core/oauth';
 import { MirrorTransport } from './core/remote';
 import { ensurePrivateRepo, githubAuthEnv } from './core/github';
 import { Limits, MB, parseLimits } from './core/limits';
 import { Logger } from './core/logger';
-import { claudeProjectsDir, encodeProjectDir, projectKey } from './core/paths';
-import { SyncResult, SyncService } from './core/syncService';
+import { claudeProjectsDir, encodeProjectDir, projectKey, sanitizeProjectKey } from './core/paths';
+import { DeviceNameTakenError, SyncResult, SyncService } from './core/syncService';
 import { listSessions } from './core/transcripts';
 import { FolderTransport, GitTransport, Transport } from './core/transport';
 
 const WARNED_KEY = 'pushWarningAccepted';
+const INSTALL_KEY = 'installId';
+
+/** Tells this installation from another computer that happens to have the same device name. */
+function installIdOf(context: vscode.ExtensionContext): string {
+  let id = context.globalState.get<string>(INSTALL_KEY);
+  if (!id) {
+    id = randomUUID();
+    void context.globalState.update(INSTALL_KEY, id);
+  }
+  return id;
+}
+
+/** Thrown by a command's body to run the whole command again (after the user changed a setting it depends on). */
+class RetryCommand extends Error {}
+
+/** Local copies the extension keeps per method, inside its own storage folder. Removed on «Disconnect». */
+const CACHE_DIR: Record<Mode, string | undefined> = {
+  github: 'github-repo',
+  git: 'repo',
+  dropbox: 'dropbox-cache',
+  onedrive: 'onedrive-cache',
+  folder: undefined,
+};
+
+const BUSY_STALE_MS = 10 * 60_000;
 const SECTION = 'claudeSessionSync';
 
 function channelLogger(channel: vscode.OutputChannel): Logger {
@@ -65,6 +94,8 @@ const METHODS: (vscode.QuickPickItem & { mode: Mode })[] = [
 ];
 
 const CHANGE_METHOD = 'Change method';
+const RESUME = 'Resume a session';
+const RELOAD = 'Reload window';
 
 /** Errors that mean «cannot reach or not signed in», as opposed to a bug. */
 const isAccessError = (m: string): boolean =>
@@ -72,14 +103,51 @@ const isAccessError = (m: string): boolean =>
     m,
   );
 
+/** Step text for the notification that is open right now («Downloading 3/12: …»). */
+let currentStep: ((message: string) => void) | undefined;
+const step = (message: string): void => {
+  currentStep?.(message);
+};
+
+let statusItem: vscode.StatusBarItem | undefined;
+/** What the last push or pull did, kept in the status bar so the result stays visible after the toast is gone. */
+let lastResult = '';
+
+const STATUS_LABEL_BY_MODE: Record<Mode, string> = {
+  github: 'GitHub',
+  dropbox: 'Dropbox',
+  onedrive: 'OneDrive',
+  folder: 'Cloud folder',
+  git: 'Git',
+};
+
+function renderStatus(): void {
+  if (!statusItem) return;
+  const mode = vscode.workspace.getConfiguration(SECTION).get<string>('mode');
+  statusItem.text = isMode(mode)
+    ? `$(sync) Claude Sync: ${STATUS_LABEL_BY_MODE[mode]}${lastResult ? ` · ${lastResult}` : ''}`
+    : '$(sync) Claude Sync: not connected';
+  statusItem.tooltip = 'Change the sync method or disconnect';
+  statusItem.show();
+}
+
 const isMode = (v: unknown): v is Mode => v === 'github' || isCloudId(v) || v === 'folder' || v === 'git';
 
 /** The saved method, or a one-time question on first use. `forceAsk` is «Choose sync method». */
-async function chooseMode(cfg: vscode.WorkspaceConfiguration, forceAsk: boolean): Promise<Mode | undefined> {
+async function chooseMode(
+  cfg: vscode.WorkspaceConfiguration,
+  forceAsk: boolean,
+  intent?: 'push' | 'pull',
+): Promise<Mode | undefined> {
   const saved = cfg.get<string>('mode');
   if (!forceAsk && isMode(saved)) return saved;
+  const title = {
+    push: 'Claude Sync: where should your sessions go? (pick the method you will also use on your other device)',
+    pull: 'Claude Sync: where are the sessions from your other device? (pick the method it pushed with)',
+    none: 'Claude Sync: how should sessions travel between your devices?',
+  }[intent ?? 'none'];
   const pick = await vscode.window.showQuickPick(METHODS, {
-    title: 'Claude Sync: how should sessions travel between your devices?',
+    title,
     placeHolder: 'You can change this later with «Claude Sync: Choose sync method»',
   });
   if (!pick) return undefined;
@@ -105,16 +173,47 @@ async function githubTransport(context: vscode.ExtensionContext): Promise<Transp
   const token = async () =>
     (await vscode.authentication.getSession('github', ['repo'], { createIfNone: false }))?.accessToken ??
     authed.accessToken;
-  return new GitTransport(path.join(context.globalStorageUri.fsPath, 'github-repo'), cloneUrl, async () =>
-    githubAuthEnv(await token()),
+  return new GitTransport(
+    path.join(context.globalStorageUri.fsPath, 'github-repo'),
+    cloneUrl,
+    async () => githubAuthEnv(await token()),
+    step,
   );
 }
 
 const tokenKey = (c: CloudProvider): string => `${c.id}.refreshToken`;
 
 /** Direct access to a cloud service's API: sign in in the browser once, then keep the refresh token in the secret store. */
+let secretsWarned = false;
+
+async function saveToken(context: vscode.ExtensionContext, cloud: CloudProvider, token: string): Promise<void> {
+  try {
+    await context.secrets.store(tokenKey(cloud), token);
+  } catch {
+    // No keyring (some Linux setups): the sign-in works for now, but cannot be remembered.
+    if (secretsWarned) return;
+    secretsWarned = true;
+    void vscode.window.showWarningMessage(
+      'Claude Sync: VS Code cannot store the sign-in on this computer (no keyring), so you will have to sign in again next time. GitHub or a git repository do not have this limit.',
+    );
+  }
+}
+
 async function cloudTransport(context: vscode.ExtensionContext, cloud: CloudProvider): Promise<Transport | undefined> {
-  let refresh = await context.secrets.get(tokenKey(cloud));
+  const http = retryingFetch(fetch);
+  let refresh = await context.secrets.get(tokenKey(cloud)).then(
+    (t) => t,
+    () => undefined,
+  );
+  if (!refresh && vscode.env.remoteName) {
+    const pick = await vscode.window.showWarningMessage(
+      `Claude Sync: this window runs remotely (${vscode.env.remoteName}), so the ${cloud.label} browser sign-in may not reach it. GitHub or a git repository work everywhere.`,
+      'Try anyway',
+      CHANGE_METHOD,
+    );
+    if (pick === CHANGE_METHOD) await vscode.commands.executeCommand(`${SECTION}.chooseMode`);
+    if (pick !== 'Try anyway') return undefined;
+  }
   if (!refresh) {
     const tokens = await vscode.window.withProgress(
       {
@@ -128,7 +227,7 @@ async function cloudTransport(context: vscode.ExtensionContext, cloud: CloudProv
           ctl.abort();
         });
         return signIn(
-          fetch,
+          http,
           cloud.oauth,
           (url) => {
             void vscode.env.openExternal(vscode.Uri.parse(url));
@@ -142,14 +241,15 @@ async function cloudTransport(context: vscode.ExtensionContext, cloud: CloudProv
     );
     if (!tokens) return undefined;
     refresh = tokens.refreshToken;
-    await context.secrets.store(tokenKey(cloud), refresh);
+    await saveToken(context, cloud, refresh);
   }
-  const token = tokenProvider(fetch, cloud.oauth, refresh, async (t) => {
-    await context.secrets.store(tokenKey(cloud), t);
+  const token = tokenProvider(http, cloud.oauth, refresh, async (t) => {
+    await saveToken(context, cloud, t);
   });
   return new MirrorTransport(
     path.join(context.globalStorageUri.fsPath, `${cloud.id}-cache`),
-    cloud.store(fetch, token),
+    cloud.store(http, token),
+    step,
   );
 }
 
@@ -209,17 +309,21 @@ async function gitTransport(context: vscode.ExtensionContext, cfg: vscode.Worksp
     if (pick) await vscode.commands.executeCommand('workbench.action.openSettings', `${SECTION}.repoUrl`);
     return undefined;
   }
-  return new GitTransport(path.join(context.globalStorageUri.fsPath, 'repo'), repoUrl);
+  return new GitTransport(path.join(context.globalStorageUri.fsPath, 'repo'), repoUrl, undefined, step);
 }
 
-async function openSession(context: vscode.ExtensionContext, log: Logger): Promise<Session | undefined> {
+async function openSession(
+  context: vscode.ExtensionContext,
+  log: Logger,
+  intent?: 'push' | 'pull',
+): Promise<Session | undefined> {
   const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!folder) {
     void vscode.window.showErrorMessage('Claude Sync: open a folder first.');
     return;
   }
   const cfg = vscode.workspace.getConfiguration(SECTION);
-  const mode = await chooseMode(cfg, false);
+  const mode = await chooseMode(cfg, false, intent);
   if (!mode) return;
   const transport = await {
     github: () => githubTransport(context),
@@ -230,13 +334,16 @@ async function openSession(context: vscode.ExtensionContext, log: Logger): Promi
   }[mode]();
   if (!transport) return;
   const localDir = path.join(claudeProjectsDir(cfg.get<string>('claudeDir', '')), encodeProjectDir(folder));
-  const key = projectKey(await remoteOf(folder), folder);
+  const key = sanitizeProjectKey(cfg.get<string>('projectKey', '')) || projectKey(await remoteOf(folder), folder);
   const limits = parseLimits({
     maxFileSizeMB: cfg.get('maxFileSizeMB'),
     maxSessionAgeDays: cfg.get('maxSessionAgeDays'),
   });
   const deviceName = cfg.get<string>('deviceName', '').trim() || os.hostname();
-  const service = new SyncService({ transport, localDir, projectKey: key, deviceName, limits }, log);
+  const service = new SyncService(
+    { transport, localDir, projectKey: key, deviceName, limits, installId: installIdOf(context) },
+    log,
+  );
   return { service, localDir, folder, limits, where: describeMethod(vscode.workspace.getConfiguration(SECTION)) };
 }
 
@@ -254,14 +361,24 @@ async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boole
 function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: string, device: string): void {
   const older = r.tooOld > 0 ? ` ${r.tooOld} older than ${limits.maxAgeDays} days left out.` : '';
   const via = verb === 'push' ? `to ${where} as «${device}»` : `from «${device}» in ${where}`;
+  const nothing = r.pushed === false;
+  lastResult = `${nothing ? `nothing new to ${verb}` : `${verb}ed ${r.copied.length}`} · ${new Date().toLocaleTimeString()}`;
+  renderStatus();
+  const canResume = verb === 'pull' && r.copied.length > 0;
+  const buttons = [...(canResume ? [RESUME, RELOAD] : []), 'Manage connection'];
   void vscode.window
     .showInformationMessage(
-      r.pushed === false
+      nothing
         ? `Claude Sync: nothing new to ${verb} ${via}.${older}`
-        : `Claude Sync: ${verb}ed ${r.copied.length} session(s) ${via}.${older}`,
-      'Manage connection',
+        : `Claude Sync: ${verb}ed ${r.copied.length} session(s) ${via}.${older}` +
+            (canResume ? ' If they are not in the Claude Code session list yet, reload the window.' : ''),
+      ...buttons,
     )
-    .then((pick) => (pick ? vscode.commands.executeCommand(`${SECTION}.manage`) : undefined));
+    .then((pick) => {
+      if (pick === RESUME) return vscode.commands.executeCommand(`${SECTION}.resume`);
+      if (pick === RELOAD) return vscode.commands.executeCommand('workbench.action.reloadWindow');
+      return pick ? vscode.commands.executeCommand(`${SECTION}.manage`) : undefined;
+    });
   if (r.tooLarge.length) {
     void vscode.window.showWarningMessage(
       `Claude Sync: ${r.tooLarge.length} session(s) are over ${Math.round(limits.maxFileBytes / MB)} MB and were NOT pushed: ${r.tooLarge.join(', ')}`,
@@ -288,16 +405,25 @@ const deviceLabel = (d: DeviceInfo): string => (d.legacy ? 'Shared (before 0.5.0
 /** Which device's export to work with. Skips the question when there is only one candidate. */
 async function chooseDevice(
   service: SyncService,
-  opts: { includeOwn: boolean; title: string },
+  opts: { includeOwn: boolean; title: string; where: string },
 ): Promise<DeviceInfo | undefined> {
   const all = await progress('Claude Sync: looking at the storage…', () => service.devices());
   const devices = all.filter((d) => opts.includeOwn || d.name !== service.device);
   if (!devices.length) {
-    void vscode.window.showInformationMessage(
-      opts.includeOwn
-        ? 'Claude Sync: nothing has been exported for this project yet.'
-        : 'Claude Sync: no other device has exported this project yet. Run «Push sessions» on that device first.',
-    );
+    void vscode.window
+      .showWarningMessage(
+        opts.includeOwn
+          ? `Claude Sync: nothing has been exported for this project to ${opts.where} yet.`
+          : `Claude Sync: no other device has exported this project to ${opts.where}. ` +
+              'On the other device run «Push sessions» first, with the same method and the same project (git remote) as here.',
+        CHANGE_METHOD,
+        'Show log',
+      )
+      .then((pick) => {
+        if (pick === CHANGE_METHOD) return vscode.commands.executeCommand(`${SECTION}.chooseMode`);
+        if (pick) return vscode.commands.executeCommand(`${SECTION}.showLog`);
+        return undefined;
+      });
     return undefined;
   }
   if (devices.length === 1 && !opts.includeOwn) return devices[0];
@@ -357,7 +483,16 @@ async function chooseSessionsToPull(service: SyncService, from: string): Promise
 }
 
 const progress = <T>(title: string, task: () => Promise<T>) =>
-  vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title }, task);
+  vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title }, async (p) => {
+    currentStep = (message) => {
+      p.report({ message });
+    };
+    try {
+      return await task();
+    } finally {
+      currentStep = undefined;
+    }
+  });
 
 export function activate(context: vscode.ExtensionContext): void {
   const channel = vscode.window.createOutputChannel('Claude Session Sync');
@@ -393,6 +528,20 @@ export function activate(context: vscode.ExtensionContext): void {
       if (pick) await vscode.commands.executeCommand(`${SECTION}.chooseMode`);
       return false;
     }
+    if (isCloudId(mode)) {
+      const cloud = CLOUDS[mode];
+      const pick = await vscode.window.showErrorMessage(
+        `Claude Sync: ${cloud.label} did not accept the sign-in (${message}).`,
+        'Sign in again',
+        CHANGE_METHOD,
+      );
+      if (pick === 'Sign in again') {
+        await context.secrets.delete(tokenKey(cloud));
+        return true;
+      }
+      if (pick) await vscode.commands.executeCommand(`${SECTION}.chooseMode`);
+      return false;
+    }
     const pick = await vscode.window.showErrorMessage(
       `Claude Sync: no access to your git repository (${message}). Check the URL and sign in to git on this computer.`,
       'Open settings',
@@ -404,51 +553,100 @@ export function activate(context: vscode.ExtensionContext): void {
     return false;
   };
 
+  /** Two operations at once would use the same local cache. A stale lock (an unanswered dialog) expires. */
+  let busySince = 0;
+
+  const advise = async (kind: 'network' | 'full'): Promise<boolean> => {
+    const pick = await vscode.window.showErrorMessage(
+      kind === 'network'
+        ? 'Claude Sync: cannot reach the storage. Check your internet connection and try again.'
+        : 'Claude Sync: the storage is full. Free some space there (or choose another method) and try again.',
+      'Try again',
+      CHANGE_METHOD,
+      'Show log',
+    );
+    if (pick === CHANGE_METHOD) await vscode.commands.executeCommand(`${SECTION}.chooseMode`);
+    if (pick === 'Show log') channel.show();
+    return pick === 'Try again';
+  };
+
   const command = (id: string, body: (s: Session) => Promise<void>, before?: () => Promise<boolean>) =>
     vscode.commands.registerCommand(`${SECTION}.${id}`, async () => {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          if (before && !(await before())) return;
-          const s = await openSession(context, log);
-          if (s) await body(s);
-          return;
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e);
-          log.error(message);
-          if (attempt === 0 && isAccessError(message)) {
-            if (await reconnect(message)) continue;
+      if (busySince && Date.now() - busySince < BUSY_STALE_MS) {
+        void vscode.window.showInformationMessage('Claude Sync: another Claude Sync operation is still running.');
+        return;
+      }
+      busySince = Date.now();
+      try {
+        let reconnected = false;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            if (before && !(await before())) return;
+            const s = await openSession(context, log, id === 'push' || id === 'pull' ? id : undefined);
+            if (s) await body(s);
+            return;
+          } catch (e) {
+            if (e instanceof RetryCommand) continue;
+            const message = e instanceof Error ? e.message : String(e);
+            log.error(message);
+            if (!reconnected && isAccessError(message)) {
+              reconnected = true;
+              if (await reconnect(message)) continue;
+              return;
+            }
+            const kind = classifyError(message);
+            if (kind !== 'other') {
+              if (await advise(kind)) continue;
+              return;
+            }
+            const pick = await vscode.window.showErrorMessage(`Claude Sync failed: ${message}`, 'Show log');
+            if (pick) channel.show();
             return;
           }
-          const pick = await vscode.window.showErrorMessage(`Claude Sync failed: ${message}`, 'Show log');
-          if (pick) channel.show();
-          return;
         }
+      } finally {
+        busySince = 0;
       }
     });
 
+  /** Two computers with one device name: let the user rename this one, or confirm it is the same computer. */
+  const resolveNameClash = async (device: string): Promise<'takeOver' | undefined> => {
+    const newName = `${device}-${installIdOf(context).slice(0, 4)}`.slice(0, 64);
+    const RENAME = `Use «${newName}» on this computer`;
+    const SAME = 'This is the same computer';
+    const pick = await vscode.window.showWarningMessage(
+      `Another computer already pushes as «${device}». Two computers must not share a device name, or their sessions would be mixed up.`,
+      {
+        modal: true,
+        detail: 'Choose «Same computer» only if you reinstalled VS Code on the computer that used this name.',
+      },
+      RENAME,
+      SAME,
+    );
+    if (pick === RENAME) {
+      await vscode.workspace.getConfiguration(SECTION).update('deviceName', newName, vscode.ConfigurationTarget.Global);
+      throw new RetryCommand();
+    }
+    return pick === SAME ? 'takeOver' : undefined;
+  };
+
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
   status.command = `${SECTION}.manage`;
+  statusItem = status;
   const refreshStatus = (): void => {
-    const cfg = vscode.workspace.getConfiguration(SECTION);
-    const mode = cfg.get<string>('mode');
-    const label = {
-      github: 'GitHub',
-      dropbox: 'Dropbox',
-      onedrive: 'OneDrive',
-      folder: 'Cloud folder',
-      git: 'Git',
-    }[isMode(mode) ? mode : 'git'];
-    status.text = isMode(mode) ? `$(sync) Claude Sync: ${label}` : '$(sync) Claude Sync: not connected';
-    status.tooltip = 'Change the sync method or disconnect';
-    status.show();
+    lastResult = '';
+    renderStatus();
   };
-  refreshStatus();
+  renderStatus();
 
   context.subscriptions.push(
     channel,
     status,
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(SECTION)) refreshStatus();
+    }),
+    vscode.commands.registerCommand(`${SECTION}.showLog`, () => {
+      channel.show();
     }),
     vscode.commands.registerCommand(`${SECTION}.manage`, async () => {
       const cfg = vscode.workspace.getConfiguration(SECTION);
@@ -468,13 +666,22 @@ export function activate(context: vscode.ExtensionContext): void {
     command(
       'push',
       async (s) => {
-        report(
-          'push',
-          await progress('Claude Sync: pushing…', () => s.service.push()),
-          s.limits,
-          s.where,
-          s.service.device,
-        );
+        if (!listSessions(s.localDir).length) {
+          void vscode.window.showInformationMessage(
+            `Claude Sync: there are no Claude Code sessions for this project on this computer yet (looked in ${s.localDir}). Start a session in Claude Code first.`,
+          );
+          return;
+        }
+        const run = (takeOver: boolean) => progress('Claude Sync: pushing…', () => s.service.push({ takeOver }));
+        let result: SyncResult;
+        try {
+          result = await run(false);
+        } catch (e) {
+          if (!(e instanceof DeviceNameTakenError)) throw e;
+          if ((await resolveNameClash(e.device)) !== 'takeOver') return;
+          result = await run(true);
+        }
+        report('push', result, s.limits, s.where, s.service.device);
       },
       () => confirmFirstPush(context),
     ),
@@ -501,7 +708,7 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const ok = await vscode.window.showWarningMessage(
-        `Disconnect from ${describeMethod(cfg)}? Sessions already stored there and on this device are left untouched.`,
+        `Disconnect from ${describeMethod(cfg)}? Sessions already stored there and on this device are left untouched. The copy the extension keeps for syncing is removed.`,
         { modal: true },
         'Disconnect',
       );
@@ -509,6 +716,8 @@ export function activate(context: vscode.ExtensionContext): void {
       await cfg.update('mode', '', vscode.ConfigurationTarget.Global);
       await cfg.update('syncFolder', '', vscode.ConfigurationTarget.Global);
       for (const cloud of Object.values(CLOUDS)) await context.secrets.delete(tokenKey(cloud));
+      const cache = CACHE_DIR[mode];
+      if (cache) fs.rmSync(path.join(context.globalStorageUri.fsPath, cache), { recursive: true, force: true });
       void vscode.window.showInformationMessage(
         mode === 'github'
           ? 'Claude Sync: disconnected. To also revoke GitHub access, sign out of GitHub in the Accounts menu.'
@@ -518,6 +727,7 @@ export function activate(context: vscode.ExtensionContext): void {
     command('pull', async (s) => {
       const from = await chooseDevice(s.service, {
         includeOwn: false,
+        where: s.where,
         title: 'Claude Sync: import from which device?',
       });
       if (!from) return;
@@ -529,6 +739,7 @@ export function activate(context: vscode.ExtensionContext): void {
     command('deleteExport', async (s) => {
       const from = await chooseDevice(s.service, {
         includeOwn: true,
+        where: s.where,
         title: 'Claude Sync: delete the exported sessions of which device?',
       });
       if (!from) return;

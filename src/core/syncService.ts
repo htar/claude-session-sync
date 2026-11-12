@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Limits } from './limits';
-import { deviceDir, DeviceInfo, listDevices, safeDeviceName } from './devices';
+import { deviceDir, DeviceInfo, LEGACY_SOURCE, listDevices, safeDeviceName } from './devices';
 import { Logger, silentLogger } from './logger';
 import {
   CopyOptions,
@@ -24,6 +24,8 @@ export interface SyncConfig {
   projectKey: string;
   /** This device's name: its own folder `devices/<name>/projects/<key>` is the only place a push writes to. */
   deviceName: string;
+  /** This installation's id: tells two computers with the same device name apart. Without it nothing is checked. */
+  installId?: string;
   /** Push only: a pull takes everything the repository holds. */
   limits?: Limits;
   /** Clock for the age limit, injectable for tests. */
@@ -50,6 +52,16 @@ export interface AvailableSession extends SessionInfo {
 
 const MAX_PUSH_ATTEMPTS = 2;
 
+/** The device folder of the store belongs to another installation: two machines share one name (e.g. «MacBook-Pro»). */
+export class DeviceNameTakenError extends Error {
+  constructor(readonly device: string) {
+    super(`The device name «${device}» is already used by another computer.`);
+  }
+}
+
+/** Written once into `devices/<name>/`, so a second computer with the same name is noticed instead of mixed in. */
+const DEVICE_MARKER = 'device.json';
+
 /** Serialises operations: two concurrent git commands in one clone corrupt each other's index. */
 export class SyncService {
   private queue: Promise<unknown> = Promise.resolve();
@@ -64,13 +76,15 @@ export class SyncService {
     this.device = safeDeviceName(cfg.deviceName);
   }
 
-  push(): Promise<SyncResult> {
+  /** `takeOver`: the user confirmed that a folder with this name is this very computer's (a reinstalled editor). */
+  push(opts: { takeOver?: boolean } = {}): Promise<SyncResult> {
     return this.exclusive(async () => {
       const filter = this.pushFilter();
       let last: CopyResult | undefined;
       // A push can lose a race against another device: pull again and retry once.
       for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
         await this.cfg.transport.refresh();
+        this.claimDevice(opts.takeOver === true);
         last = copyTranscripts(this.cfg.localDir, this.dirOf(this.device), filter);
         try {
           const pushed = await this.cfg.transport.publish(
@@ -154,10 +168,35 @@ export class SyncService {
           break;
         }
       }
+      // When nothing but the ownership marker is left, the device is gone completely.
+      const deviceRoot = path.join(root, 'devices', device);
+      if (device !== LEGACY_SOURCE && fs.existsSync(deviceRoot)) {
+        const left = fs.readdirSync(deviceRoot);
+        if (left.length === 1 && left[0] === DEVICE_MARKER) fs.rmSync(deviceRoot, { recursive: true });
+      }
       const published = await this.cfg.transport.publish(`remove ${device}: ${removed} session(s)`, removed);
       this.log.info(`removed ${device}: ${removed} session(s), published=${published}`);
       return { removed, published };
     });
+  }
+
+  private claimDevice(takeOver: boolean): void {
+    const id = this.cfg.installId;
+    if (!id) return;
+    const dir = path.join(this.cfg.transport.root, 'devices', this.device);
+    const marker = path.join(dir, DEVICE_MARKER);
+    if (fs.existsSync(marker)) {
+      let owner: unknown;
+      try {
+        owner = (JSON.parse(fs.readFileSync(marker, 'utf8')) as { id?: unknown }).id;
+      } catch {
+        owner = undefined; // unreadable marker: treat the folder as unclaimed
+      }
+      if (owner === id) return;
+      if (typeof owner === 'string' && !takeOver) throw new DeviceNameTakenError(this.device);
+    }
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(marker, JSON.stringify({ id, name: this.device }));
   }
 
   private dirOf(device: string): string {

@@ -53,15 +53,23 @@ export class MirrorTransport implements Transport {
   constructor(
     readonly root: string,
     private readonly store: RemoteStore,
+    /** Tells the user what is going on: «Downloading 3/12…». */
+    private readonly onProgress: (message: string) => void = () => undefined,
   ) {}
 
   async refresh(): Promise<void> {
     fs.mkdirSync(this.root, { recursive: true });
-    const listed = await this.store.list();
+    this.onProgress('Reading the file list…');
+    // A name from the network must never lead outside the cache folder.
+    const listed = (await this.store.list()).filter((f) => f.rel.split('/').every((p) => p && p !== '.' && p !== '..'));
     this.remote = new Map(listed.map((f) => [f.rel, f.size]));
-    for (const f of listed) {
+    const todo = listed.filter((f) => {
       const local = localPath(this.root, f.rel);
-      if (fs.existsSync(local) && fs.statSync(local).size === f.size) continue;
+      return !fs.existsSync(local) || fs.statSync(local).size !== f.size;
+    });
+    for (const [i, f] of todo.entries()) {
+      this.onProgress(`Downloading ${i + 1}/${todo.length}: ${path.basename(f.rel)}`);
+      const local = localPath(this.root, f.rel);
       const data = await this.store.download(f.rel);
       fs.mkdirSync(path.dirname(local), { recursive: true });
       const tmp = path.join(path.dirname(local), `.${path.basename(local)}.tmp-${process.pid}`);
@@ -78,14 +86,16 @@ export class MirrorTransport implements Transport {
     const local = walk(this.root);
     const localRels = new Set(local.map((f) => f.rel));
     let changed = false;
-    for (const f of local) {
-      if (this.remote.get(f.rel) === f.size) continue;
+    const toUpload = local.filter((f) => this.remote.get(f.rel) !== f.size);
+    for (const [i, f] of toUpload.entries()) {
+      this.onProgress(`Uploading ${i + 1}/${toUpload.length}: ${path.basename(f.rel)}`);
       await this.store.upload(f.rel, fs.readFileSync(localPath(this.root, f.rel)));
       this.remote.set(f.rel, f.size);
       changed = true;
     }
-    for (const rel of [...this.remote.keys()]) {
-      if (localRels.has(rel)) continue;
+    const toRemove = [...this.remote.keys()].filter((rel) => !localRels.has(rel));
+    for (const [i, rel] of toRemove.entries()) {
+      this.onProgress(`Deleting ${i + 1}/${toRemove.length}: ${path.basename(rel)}`);
       await this.store.remove(rel);
       this.remote.delete(rel);
       changed = true;

@@ -29,6 +29,7 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 
 - **Push before you leave a device, Pull before you start on another.**
 - Do not continue one session on two devices at once: the extension reports a conflict and overwrites nothing.
+- A pulled session may not show up in the Claude Code session list right away. Reload the window (**Developer: Reload Window**), or use **Claude Sync: Resume a session**, which opens it directly.
 - A cloud service does not deliver files instantly: if Pull finds nothing, wait a minute and try again.
 - Every device exports to its own folder (named after the device, see `claudeSessionSync.deviceName`), so devices never overwrite each other and you always pick the source yourself.
 - Remove what a device exported: **Claude Sync: Delete exported sessions** (asks for confirmation; your own sessions on your devices are never touched).
@@ -49,13 +50,27 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 
 All settings apply per machine: set them in User settings.
 
-| Setting                               | Default   | What it does                                                              |
-| ------------------------------------- | --------- | ------------------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | empty     | `github`, `folder` (cloud storage) or `git`. Empty = ask on first use.    |
-| `claudeSessionSync.deviceName`        | host name | This device's name in the storage: other devices pick it when importing.  |
-| `claudeSessionSync.repoUrl`           | empty     | Address of the private repository for the "own git" method.               |
-| `claudeSessionSync.maxFileSizeMB`     | `90`      | Sessions larger than this are not pushed (and you are warned).            |
-| `claudeSessionSync.maxSessionAgeDays` | `30`      | Only sessions modified within the last N days are pushed. `0` = no limit. |
+| Setting                               | Default   | What it does                                                                                                                                  |
+| ------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | empty     | `github`, `folder` (cloud storage) or `git`. Empty = ask on first use.                                                                        |
+| `claudeSessionSync.deviceName`        | host name | This device's name in the storage: other devices pick it when importing.                                                                      |
+| `claudeSessionSync.projectKey`        | empty     | Same value on every device to match a project without a git remote (or with different remotes). Empty = the git remote, else the folder name. |
+| `claudeSessionSync.repoUrl`           | empty     | Address of the private repository for the "own git" method.                                                                                   |
+| `claudeSessionSync.maxFileSizeMB`     | `90`      | Sessions larger than this are not pushed (and you are warned).                                                                                |
+| `claudeSessionSync.maxSessionAgeDays` | `30`      | Only sessions modified within the last N days are pushed. `0` = no limit.                                                                     |
+
+## If something goes wrong
+
+| What you see                                                                                  | What it means and what to do                                                                                    |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| «cannot reach the storage»                                                                    | No internet, or the service is down. The extension already retried; press «Try again» when you are back online. |
+| «the storage is full»                                                                         | Free space in Dropbox/OneDrive/GitHub, or choose another method.                                                |
+| «did not accept the sign-in»                                                                  | The access expired or was revoked. Press «Sign in again».                                                       |
+| «Another computer already pushes as …»                                                        | Two computers have the same device name. Rename this one (offered), or confirm it is the same computer.         |
+| Pull finds nothing                                                                            | The other device has not pushed yet, or uses another method or another project key (see `projectKey`).          |
+| Dropbox/OneDrive sign-in does not finish in a remote window (SSH, WSL, container, Codespaces) | The browser cannot reach VS Code there. Use GitHub or your own git repository.                                  |
+
+**Claude Sync: Disconnect storage** also removes the copy the extension keeps on this computer for syncing; your own Claude Code sessions are never touched.
 
 ## Security
 

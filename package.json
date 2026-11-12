@@ -2,7 +2,7 @@
   "name": "claude-session-sync",
   "displayName": "Session Sync for Claude Code",
   "description": "Continue a Claude Code session on another device. Sync your session history through GitHub, iCloud Drive, Dropbox, OneDrive, Google Drive and more, and choose which sessions to bring over.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "tkhmelovskyi",
   "icon": "images/icon.png",
   "repository": {
@@ -141,6 +141,12 @@
           "minimum": 0,
           "scope": "machine",
           "markdownDescription": "Push only sessions modified within this many days. `0` = no limit. A pull always takes everything the repository holds."
+        },
+        "claudeSessionSync.projectKey": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "The same value on every device matches a project that has no git remote (or different remotes). Empty = the git remote, otherwise the folder name."
         }
       }
     }

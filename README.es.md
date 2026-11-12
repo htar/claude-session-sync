@@ -29,6 +29,7 @@ Los comandos están en la Paleta de comandos: **Cmd+Shift+P** (Windows y Linux: 
 
 - **Haz Push antes de dejar un dispositivo y Pull antes de empezar en otro.**
 - No continúes una misma sesión en dos dispositivos a la vez: la extensión avisa del conflicto y no sobrescribe nada.
+- Una sesión traída puede no aparecer enseguida en la lista de sesiones de Claude Code. Recarga la ventana (**Developer: Reload Window**) o usa **Claude Sync: Resume a session**, que la abre directamente.
 - Un servicio en la nube no entrega los archivos al instante: si Pull no encuentra nada, espera un minuto e inténtalo de nuevo.
 - Cada dispositivo exporta a su propia carpeta (con el nombre del dispositivo, ver `claudeSessionSync.deviceName`), así que no se sobrescriben entre sí y tú eliges el origen.
 - Elimina lo que exportó un dispositivo: **Claude Sync: Delete exported sessions** (pide confirmación; tus sesiones en tus dispositivos no se tocan).
@@ -49,13 +50,27 @@ Los comandos están en la Paleta de comandos: **Cmd+Shift+P** (Windows y Linux: 
 
 Todos los ajustes se aplican por equipo: defínelos en los ajustes de usuario (User settings).
 
-| Ajuste                                | Valor por defecto | Qué hace                                                                                  |
-| ------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | vacío             | `github`, `folder` (almacenamiento en la nube) o `git`. Vacío = preguntar la primera vez. |
-| `claudeSessionSync.deviceName`        | nombre del equipo | Nombre de este dispositivo en el almacenamiento: los demás lo eligen al importar.         |
-| `claudeSessionSync.repoUrl`           | vacío             | Dirección del repositorio privado para el método «git propio».                            |
-| `claudeSessionSync.maxFileSizeMB`     | `90`              | Las sesiones más grandes que esto no se envían (y se te avisa).                           |
-| `claudeSessionSync.maxSessionAgeDays` | `30`              | Solo se envían las sesiones modificadas en los últimos N días. `0` = sin límite.          |
+| Ajuste                                | Valor por defecto | Qué hace                                                                                                                                                  |
+| ------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | vacío             | `github`, `folder` (almacenamiento en la nube) o `git`. Vacío = preguntar la primera vez.                                                                 |
+| `claudeSessionSync.deviceName`        | nombre del equipo | Nombre de este dispositivo en el almacenamiento: los demás lo eligen al importar.                                                                         |
+| `claudeSessionSync.projectKey`        | vacío             | El mismo valor en todos los dispositivos para un proyecto sin git remote (o con remotes distintos). Vacío = el git remote, si no el nombre de la carpeta. |
+| `claudeSessionSync.repoUrl`           | vacío             | Dirección del repositorio privado para el método «git propio».                                                                                            |
+| `claudeSessionSync.maxFileSizeMB`     | `90`              | Las sesiones más grandes que esto no se envían (y se te avisa).                                                                                           |
+| `claudeSessionSync.maxSessionAgeDays` | `30`              | Solo se envían las sesiones modificadas en los últimos N días. `0` = sin límite.                                                                          |
+
+## Si algo sale mal
+
+| Qué ves                                                                                                     | Qué significa y qué hacer                                                                                             |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| «cannot reach the storage»                                                                                  | Sin internet o el servicio no responde. La extensión ya reintentó; pulsa «Try again» cuando vuelvas a estar en línea. |
+| «the storage is full»                                                                                       | Libera espacio en Dropbox/OneDrive/GitHub o elige otro método.                                                        |
+| «did not accept the sign-in»                                                                                | El acceso caducó o fue revocado. Pulsa «Sign in again».                                                               |
+| «Another computer already pushes as …»                                                                      | Dos equipos tienen el mismo nombre de dispositivo. Renombra este (se ofrece) o confirma que es el mismo equipo.       |
+| Pull no encuentra nada                                                                                      | El otro dispositivo aún no hizo Push, o usa otro método u otra clave de proyecto (ver `projectKey`).                  |
+| El inicio de sesión de Dropbox/OneDrive no termina en una ventana remota (SSH, WSL, contenedor, Codespaces) | El navegador no llega a VS Code allí. Usa GitHub o tu propio repositorio git.                                         |
+
+**Claude Sync: Disconnect storage** también elimina la copia que la extensión guarda en este equipo para sincronizar; tus propias sesiones de Claude Code nunca se tocan.
 
 ## Seguridad
 

@@ -17,15 +17,18 @@ export class GitTransport implements Transport {
     private readonly url: string,
     /** Credentials for this call, e.g. a token from the editor's GitHub sign-in. */
     private readonly env: () => Promise<GitEnv> = () => Promise.resolve({}),
+    private readonly onProgress: (message: string) => void = () => undefined,
   ) {}
 
   async refresh(): Promise<void> {
     const env = await this.env();
+    this.onProgress('Fetching the repository…');
     await ensureClone(this.root, this.url, env);
     await pullRepo(this.root, env);
   }
 
   async publish(message: string): Promise<boolean> {
+    this.onProgress('Uploading to the repository…');
     return commitAndPush(this.root, message, await this.env());
   }
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1
+
+- Status-bar item «Claude Sync» and command «Manage connection»: change the sync method or disconnect in one place.
+  The Push/Pull message has a «Manage connection» button too.
+- When the chosen storage is not reachable or you are not signed in, the extension offers to sign in to GitHub again,
+  pick the cloud storage again, or open the repository setting, then retries the command.
+- Dropbox is found through its own `info.json`, so a non-standard location (another drive, several accounts) no longer
+  asks for the folder by hand.
+
 ## 0.5.0
 
 - Each device now exports to its own folder (`devices/<device name>/…`, name from the new `claudeSessionSync.deviceName`

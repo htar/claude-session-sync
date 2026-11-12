@@ -32,6 +32,7 @@ Los comandos están en la Paleta de comandos: **Cmd+Shift+P** (Windows y Linux: 
 - Un servicio en la nube no entrega los archivos al instante: si Pull no encuentra nada, espera un minuto e inténtalo de nuevo.
 - Cada dispositivo exporta a su propia carpeta (con el nombre del dispositivo, ver `claudeSessionSync.deviceName`), así que no se sobrescriben entre sí y tú eliges el origen.
 - Elimina lo que exportó un dispositivo: **Claude Sync: Delete exported sessions** (pide confirmación; tus sesiones en tus dispositivos no se tocan).
+- Pulsa **Claude Sync** en la barra de estado (o ejecuta **Claude Sync: Manage connection**) para cambiar el método o desconectar. Si no hay acceso al almacenamiento o no has iniciado sesión, la extensión ofrece iniciar sesión de nuevo o elegir otra vez el almacenamiento (en un dispositivo nuevo se elige una sola vez; Dropbox se encuentra incluso en un disco no estándar).
 - Cambia el método cuando quieras: **Claude Sync: Choose sync method**. Para desconectar la nube: **Claude Sync: Disconnect storage** (no se borra nada del almacenamiento ni del dispositivo).
 
 ## Formas de sincronizar

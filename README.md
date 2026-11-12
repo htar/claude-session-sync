@@ -32,6 +32,7 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 - A cloud service does not deliver files instantly: if Pull finds nothing, wait a minute and try again.
 - Every device exports to its own folder (named after the device, see `claudeSessionSync.deviceName`), so devices never overwrite each other and you always pick the source yourself.
 - Remove what a device exported: **Claude Sync: Delete exported sessions** (asks for confirmation; your own sessions on your devices are never touched).
+- Click **Claude Sync** in the status bar (or run **Claude Sync: Manage connection**) to change the method or disconnect. If the storage cannot be reached or you are not signed in, the extension offers to sign in again or pick the storage again (on a new device, pick it once: Dropbox is found even on a non-standard drive).
 - Change the method any time: **Claude Sync: Choose sync method**. To forget it altogether: **Claude Sync: Disconnect storage** (nothing is deleted from the storage or from your device).
 
 ## Ways to sync

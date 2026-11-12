@@ -31,6 +31,7 @@
 - 云服务不会立即送达文件：如果 Pull 没有找到内容，请等一分钟再试。
 - 每台设备导出到各自的文件夹（以设备命名，见 `claudeSessionSync.deviceName`），因此设备之间不会互相覆盖，来源由你自己选择。
 - 删除某台设备导出的内容：**Claude Sync: Delete exported sessions**（会要求确认；你设备上的会话不会被触及）。
+- 点击状态栏中的 **Claude Sync**（或运行 **Claude Sync: Manage connection**）即可更改方式或断开连接。若无法访问存储或尚未登录，扩展会提示重新登录或重新选择存储（在新设备上只需选择一次；即使 Dropbox 位于非标准磁盘也能找到）。
 - 随时可更改方式：**Claude Sync: Choose sync method**。断开云存储：**Claude Sync: Disconnect storage**（不会删除存储或本机中的任何内容）。
 
 ## 同步方式

@@ -51,6 +51,14 @@ const METHODS: (vscode.QuickPickItem & { mode: Mode })[] = [
   },
 ];
 
+const CHANGE_METHOD = 'Change method';
+
+/** Errors that mean «cannot reach or not signed in», as opposed to a bug. */
+const isAccessError = (m: string): boolean =>
+  /Sync folder not found|HTTP 40[13]|authentication failed|could not read (username|password)|permission denied|not authorized|repository not found|sign.?in/i.test(
+    m,
+  );
+
 const isMode = (v: unknown): v is Mode => v === 'github' || v === 'folder' || v === 'git';
 
 /** The saved method, or a one-time question on first use. `forceAsk` is «Choose sync method». */
@@ -184,7 +192,6 @@ async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boole
   return Boolean(ok);
 }
 
-const CHANGE_METHOD = 'Change method';
 
 function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: string, device: string): void {
   const older = r.tooOld > 0 ? ` ${r.tooOld} older than ${limits.maxAgeDays} days left out.` : '';
@@ -194,9 +201,9 @@ function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: str
       r.pushed === false
         ? `Claude Sync: nothing new to ${verb} ${via}.${older}`
         : `Claude Sync: ${verb}ed ${r.copied.length} session(s) ${via}.${older}`,
-      CHANGE_METHOD,
+      'Manage connection',
     )
-    .then((pick) => (pick ? vscode.commands.executeCommand(`${SECTION}.chooseMode`) : undefined));
+    .then((pick) => (pick ? vscode.commands.executeCommand(`${SECTION}.manage`) : undefined));
   if (r.tooLarge.length) {
     void vscode.window.showWarningMessage(
       `Claude Sync: ${r.tooLarge.length} session(s) are over ${Math.round(limits.maxFileBytes / MB)} MB and were NOT pushed: ${r.tooLarge.join(', ')}`,
@@ -298,22 +305,100 @@ export function activate(context: vscode.ExtensionContext): void {
   const channel = vscode.window.createOutputChannel('Claude Session Sync');
   const log = channelLogger(channel);
 
+  /** The chosen storage cannot be reached or the account is not signed in: offer to reconnect instead of a bare error. */
+  const reconnect = async (message: string): Promise<boolean> => {
+    const cfg = vscode.workspace.getConfiguration(SECTION);
+    const mode = cfg.get<string>('mode');
+    if (mode === 'github') {
+      const pick = await vscode.window.showErrorMessage(
+        `Claude Sync: no access to GitHub (${message}).`,
+        'Sign in to GitHub',
+        CHANGE_METHOD,
+      );
+      if (pick === 'Sign in to GitHub') {
+        await vscode.authentication.getSession('github', ['repo'], { forceNewSession: true });
+        return true;
+      }
+      if (pick) await vscode.commands.executeCommand(`${SECTION}.chooseMode`);
+      return false;
+    }
+    if (mode === 'folder') {
+      const pick = await vscode.window.showErrorMessage(
+        `Claude Sync: the sync folder is not available (${message}).`,
+        'Choose the storage again',
+        CHANGE_METHOD,
+      );
+      if (pick === 'Choose the storage again') {
+        await cfg.update('syncFolder', '', vscode.ConfigurationTarget.Global);
+        return Boolean(await folderTransport(cfg));
+      }
+      if (pick) await vscode.commands.executeCommand(`${SECTION}.chooseMode`);
+      return false;
+    }
+    const pick = await vscode.window.showErrorMessage(
+      `Claude Sync: no access to your git repository (${message}). Check the URL and sign in to git on this computer.`,
+      'Open settings',
+      CHANGE_METHOD,
+    );
+    if (pick === 'Open settings')
+      await vscode.commands.executeCommand('workbench.action.openSettings', `${SECTION}.repoUrl`);
+    else if (pick) await vscode.commands.executeCommand(`${SECTION}.chooseMode`);
+    return false;
+  };
+
   const command = (id: string, body: (s: Session) => Promise<void>, before?: () => Promise<boolean>) =>
     vscode.commands.registerCommand(`${SECTION}.${id}`, async () => {
-      try {
-        if (before && !(await before())) return;
-        const s = await openSession(context, log);
-        if (s) await body(s);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        log.error(message);
-        const pick = await vscode.window.showErrorMessage(`Claude Sync failed: ${message}`, 'Show log');
-        if (pick) channel.show();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (before && !(await before())) return;
+          const s = await openSession(context, log);
+          if (s) await body(s);
+          return;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          log.error(message);
+          if (attempt === 0 && isAccessError(message)) {
+            if (await reconnect(message)) continue;
+            return;
+          }
+          const pick = await vscode.window.showErrorMessage(`Claude Sync failed: ${message}`, 'Show log');
+          if (pick) channel.show();
+          return;
+        }
       }
     });
 
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+  status.command = `${SECTION}.manage`;
+  const refreshStatus = (): void => {
+    const cfg = vscode.workspace.getConfiguration(SECTION);
+    const mode = cfg.get<string>('mode');
+    const label = { github: 'GitHub', folder: 'Cloud folder', git: 'Git' }[isMode(mode) ? mode : 'git'];
+    status.text = isMode(mode) ? `$(sync) Claude Sync: ${label}` : '$(sync) Claude Sync: not connected';
+    status.tooltip = 'Change the sync method or disconnect';
+    status.show();
+  };
+  refreshStatus();
+
   context.subscriptions.push(
     channel,
+    status,
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration(SECTION)) refreshStatus();
+    }),
+    vscode.commands.registerCommand(`${SECTION}.manage`, async () => {
+      const cfg = vscode.workspace.getConfiguration(SECTION);
+      const connected = isMode(cfg.get<string>('mode'));
+      const items = [
+        { label: '$(arrow-swap) Change sync method', description: `now: ${describeMethod(cfg)}`, id: 'chooseMode' },
+        ...(connected ? [{ label: '$(sign-out) Disconnect', description: 'Sign out of this method', id: 'disconnect' }] : []),
+        { label: '$(output) Show log', description: '', id: 'log' },
+      ];
+      const pick = await vscode.window.showQuickPick(items, { title: 'Claude Sync' });
+      if (!pick) return;
+      if (pick.id === 'log') channel.show();
+      else await vscode.commands.executeCommand(`${SECTION}.${pick.id}`);
+    }),
     command(
       'push',
       async (s) => {
@@ -332,10 +417,13 @@ export function activate(context: vscode.ExtensionContext): void {
       const mode = await chooseMode(cfg, true);
       if (!mode) return;
       // Cloud storage needs its storage picked right away, so the next Push does not ask again.
-      if (mode === 'folder' && !(await folderTransport(cfg))) return;
-      void vscode.window.showInformationMessage(
-        `Claude Sync: now using ${describeMethod(vscode.workspace.getConfiguration(SECTION))}.`,
-      );
+      let where = describeMethod(vscode.workspace.getConfiguration(SECTION));
+      if (mode === 'folder') {
+        const transport = await folderTransport(cfg);
+        if (!transport) return;
+        where = transport.root;
+      }
+      void vscode.window.showInformationMessage(`Claude Sync: now using ${where}.`);
     }),
     vscode.commands.registerCommand(`${SECTION}.disconnect`, async () => {
       const cfg = vscode.workspace.getConfiguration(SECTION);

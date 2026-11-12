@@ -62,6 +62,26 @@ const listDir = (p: string): string[] => {
   }
 };
 
+/** Dropbox records where its folder really is (any drive, any account) in info.json. */
+function dropboxPaths(e: Env): string[] {
+  const files = [
+    e.env.APPDATA && path.join(e.env.APPDATA, 'Dropbox', 'info.json'),
+    e.env.LOCALAPPDATA && path.join(e.env.LOCALAPPDATA, 'Dropbox', 'info.json'),
+    path.join(e.home, '.dropbox', 'info.json'),
+  ];
+  const out: string[] = [];
+  for (const f of files) {
+    if (!f) continue;
+    try {
+      const info = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, { path?: unknown }>;
+      for (const acc of Object.values(info)) if (typeof acc?.path === 'string') out.push(acc.path);
+    } catch {
+      /* not installed here, or unreadable */
+    }
+  }
+  return out;
+}
+
 /**
  * Roots of the chosen storage on this machine (one per signed-in account). Empty when its app's folder is not
  * where it is expected, and the caller falls back to asking the user for the folder.
@@ -78,6 +98,7 @@ export function storageRoots(storage: Storage, e: Env): string[] {
     }
   }
   for (const rel of storage.home) add(path.join(e.home, rel));
+  if (storage.id === 'dropbox') for (const p of dropboxPaths(e)) add(p);
   if (e.platform === 'win32') {
     for (const name of storage.winEnv ?? []) add(e.env[name]);
     for (const letter of storage.winDrives ?? '') add(`${letter}:\\My Drive`);

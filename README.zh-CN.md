@@ -36,11 +36,12 @@
 
 ## 同步方式
 
-| 方式                | 你需要                                                                                      | 会发生什么                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **GitHub**          | 一个 GitHub 账号                                                                            | 通过 VS Code 一键登录，自动创建私有仓库 `claude-sessions`。同名公开仓库会被拒绝。   |
-| **云存储**          | iCloud Drive、Dropbox、OneDrive、Google Drive、MEGA、pCloud、Box、Proton Drive 或 Nextcloud | 从列表中选择云服务，在其根目录创建“Claude Sessions”文件夹，文件由云客户端负责送达。 |
-| **自己的 git 仓库** | 你可以访问的私有仓库（SSH 或 credential helper）                                            | 在 `claudeSessionSync.repoUrl` 中填写其地址。                                       |
+| 方式                | 你需要                                                                             | 会发生什么                                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **GitHub**          | 一个 GitHub 账号                                                                   | 通过 VS Code 一键登录，自动创建私有仓库 `claude-sessions`。同名公开仓库会被拒绝。                                   |
+| **Dropbox（直连）** | 一个 Dropbox 账号                                                                  | 在浏览器中一键登录，电脑上无需安装 Dropbox 应用。文件保存在你的 Dropbox 的 `Apps/Session Sync for Claude Code` 中。 |
+| **云存储**          | iCloud Drive、OneDrive、Google Drive、MEGA、pCloud、Box、Proton Drive 或 Nextcloud | 从列表中选择云服务，在其根目录创建“Claude Sessions”文件夹，文件由云客户端负责送达。                                 |
+| **自己的 git 仓库** | 你可以访问的私有仓库（SSH 或 credential helper）                                   | 在 `claudeSessionSync.repoUrl` 中填写其地址。                                                                       |
 
 ## 设置
 

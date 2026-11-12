@@ -2,7 +2,7 @@
   "name": "claude-session-sync",
   "displayName": "Session Sync for Claude Code",
   "description": "Continue a Claude Code session on another device. Sync your session history through GitHub, iCloud Drive, Dropbox, OneDrive, Google Drive and more, and choose which sessions to bring over.",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "publisher": "tkhmelovskyi",
   "icon": "images/icon.png",
   "repository": {
@@ -86,13 +86,15 @@
           "enum": [
             "",
             "github",
+            "dropbox",
             "folder",
             "git"
           ],
           "enumDescriptions": [
             "Ask on first use.",
             "Sign in with GitHub; a private claude-sessions repository is created automatically.",
-            "Cloud storage: iCloud Drive, Dropbox, OneDrive, Google Drive, MEGA, pCloud, Box, Proton Drive, Nextcloud or any synced folder.",
+            "Dropbox, signed in directly in the browser (no Dropbox app needed).",
+            "A folder kept in sync by a storage's own app: iCloud Drive, OneDrive, Google Drive, MEGA, pCloud, Box, Proton Drive, Nextcloud…",
             "Your own private git repository (claudeSessionSync.repoUrl)."
           ],
           "default": "",

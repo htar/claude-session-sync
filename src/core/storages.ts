@@ -73,7 +73,7 @@ function dropboxPaths(e: Env): string[] {
   for (const f of files) {
     if (!f) continue;
     try {
-      const info = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, { path?: unknown }>;
+      const info = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, { path?: unknown } | null>;
       for (const acc of Object.values(info)) if (typeof acc?.path === 'string') out.push(acc.path);
     } catch {
       /* not installed here, or unreadable */

@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { isValidRepoUrl, remoteOf } from './core/git';
 import { DeviceInfo } from './core/devices';
 import { ensureSyncFolder, STORAGES, storageRoots } from './core/storages';
+import { DROPBOX_APP_KEY, DropboxClient, DropboxTransport, signIn, tokenProvider } from './core/dropbox';
 import { ensurePrivateRepo, githubAuthEnv } from './core/github';
 import { Limits, MB, parseLimits } from './core/limits';
 import { Logger } from './core/logger';
@@ -31,7 +32,7 @@ interface Session {
   where: string;
 }
 
-type Mode = 'github' | 'folder' | 'git';
+type Mode = 'github' | 'dropbox' | 'folder' | 'git';
 
 const METHODS: (vscode.QuickPickItem & { mode: Mode })[] = [
   {
@@ -40,9 +41,14 @@ const METHODS: (vscode.QuickPickItem & { mode: Mode })[] = [
     description: 'Sign in once; a private «claude-sessions» repository is created for you',
   },
   {
+    mode: 'dropbox',
+    label: '$(cloud) Dropbox (direct)',
+    description: 'Sign in in the browser; no Dropbox app needed on this computer',
+  },
+  {
     mode: 'folder',
-    label: '$(cloud) Cloud storage',
-    description: 'iCloud Drive, Dropbox, OneDrive, Google Drive, MEGA, pCloud, Box…',
+    label: '$(folder) Cloud folder on this computer',
+    description: "iCloud Drive, OneDrive, Google Drive, MEGA, pCloud, Box… (the storage's own app syncs it)",
   },
   {
     mode: 'git',
@@ -55,11 +61,11 @@ const CHANGE_METHOD = 'Change method';
 
 /** Errors that mean «cannot reach or not signed in», as opposed to a bug. */
 const isAccessError = (m: string): boolean =>
-  /Sync folder not found|HTTP 40[13]|authentication failed|could not read (username|password)|permission denied|not authorized|repository not found|sign.?in/i.test(
+  /Sync folder not found|HTTP 40[13]|authentication failed|could not read (username|password)|permission denied|not authorized|repository not found|sign.?in|Dropbox rejected/i.test(
     m,
   );
 
-const isMode = (v: unknown): v is Mode => v === 'github' || v === 'folder' || v === 'git';
+const isMode = (v: unknown): v is Mode => v === 'github' || v === 'dropbox' || v === 'folder' || v === 'git';
 
 /** The saved method, or a one-time question on first use. `forceAsk` is «Choose sync method». */
 async function chooseMode(cfg: vscode.WorkspaceConfiguration, forceAsk: boolean): Promise<Mode | undefined> {
@@ -80,6 +86,7 @@ async function chooseMode(cfg: vscode.WorkspaceConfiguration, forceAsk: boolean)
 function describeMethod(cfg: vscode.WorkspaceConfiguration): string {
   const mode = cfg.get<string>('mode');
   if (mode === 'github') return 'GitHub (private claude-sessions repository)';
+  if (mode === 'dropbox') return 'Dropbox (Apps/Session Sync for Claude Code)';
   if (mode === 'folder') return cfg.get<string>('syncFolder', '') || 'a cloud folder';
   if (mode === 'git') return cfg.get<string>('repoUrl', '') || 'your git repository';
   return 'nowhere yet';
@@ -94,6 +101,38 @@ async function githubTransport(context: vscode.ExtensionContext): Promise<Transp
   return new GitTransport(path.join(context.globalStorageUri.fsPath, 'github-repo'), cloneUrl, async () =>
     githubAuthEnv(await token()),
   );
+}
+
+const DROPBOX_TOKEN_KEY = 'dropbox.refreshToken';
+
+async function dropboxTransport(context: vscode.ExtensionContext): Promise<Transport | undefined> {
+  let refresh = await context.secrets.get(DROPBOX_TOKEN_KEY);
+  if (!refresh) {
+    const tokens = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Claude Sync: finish signing in to Dropbox in your browser…',
+        cancellable: true,
+      },
+      (_p, cancel) => {
+        const ctl = new AbortController();
+        cancel.onCancellationRequested(() => {
+          ctl.abort();
+        });
+        return signIn(fetch, (url) => void vscode.env.openExternal(vscode.Uri.parse(url)), {
+          signal: ctl.signal,
+        }).catch((e: unknown) => {
+          void vscode.window.showErrorMessage(`Claude Sync: ${e instanceof Error ? e.message : String(e)}`);
+          return undefined;
+        });
+      },
+    );
+    if (!tokens) return undefined;
+    refresh = tokens.refreshToken;
+    await context.secrets.store(DROPBOX_TOKEN_KEY, refresh);
+  }
+  const client = new DropboxClient(fetch, tokenProvider(fetch, DROPBOX_APP_KEY, refresh));
+  return new DropboxTransport(path.join(context.globalStorageUri.fsPath, 'dropbox-cache'), client);
 }
 
 async function pickFolderByHand(title: string): Promise<string | undefined> {
@@ -166,6 +205,7 @@ async function openSession(context: vscode.ExtensionContext, log: Logger): Promi
   if (!mode) return;
   const transport = await {
     github: () => githubTransport(context),
+    dropbox: () => dropboxTransport(context),
     folder: () => folderTransport(cfg),
     git: () => gitTransport(context, cfg),
   }[mode]();
@@ -191,7 +231,6 @@ async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boole
   if (ok) await context.globalState.update(WARNED_KEY, true);
   return Boolean(ok);
 }
-
 
 function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: string, device: string): void {
   const older = r.tooOld > 0 ? ` ${r.tooOld} older than ${limits.maxAgeDays} days left out.` : '';
@@ -373,7 +412,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const refreshStatus = (): void => {
     const cfg = vscode.workspace.getConfiguration(SECTION);
     const mode = cfg.get<string>('mode');
-    const label = { github: 'GitHub', folder: 'Cloud folder', git: 'Git' }[isMode(mode) ? mode : 'git'];
+    const label = { github: 'GitHub', dropbox: 'Dropbox', folder: 'Cloud folder', git: 'Git' }[
+      isMode(mode) ? mode : 'git'
+    ];
     status.text = isMode(mode) ? `$(sync) Claude Sync: ${label}` : '$(sync) Claude Sync: not connected';
     status.tooltip = 'Change the sync method or disconnect';
     status.show();
@@ -391,7 +432,9 @@ export function activate(context: vscode.ExtensionContext): void {
       const connected = isMode(cfg.get<string>('mode'));
       const items = [
         { label: '$(arrow-swap) Change sync method', description: `now: ${describeMethod(cfg)}`, id: 'chooseMode' },
-        ...(connected ? [{ label: '$(sign-out) Disconnect', description: 'Sign out of this method', id: 'disconnect' }] : []),
+        ...(connected
+          ? [{ label: '$(sign-out) Disconnect', description: 'Sign out of this method', id: 'disconnect' }]
+          : []),
         { label: '$(output) Show log', description: '', id: 'log' },
       ];
       const pick = await vscode.window.showQuickPick(items, { title: 'Claude Sync' });
@@ -418,7 +461,9 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!mode) return;
       // Cloud storage needs its storage picked right away, so the next Push does not ask again.
       let where = describeMethod(vscode.workspace.getConfiguration(SECTION));
-      if (mode === 'folder') {
+      if (mode === 'dropbox') {
+        if (!(await dropboxTransport(context))) return;
+      } else if (mode === 'folder') {
         const transport = await folderTransport(cfg);
         if (!transport) return;
         where = transport.root;
@@ -440,6 +485,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!ok) return;
       await cfg.update('mode', '', vscode.ConfigurationTarget.Global);
       await cfg.update('syncFolder', '', vscode.ConfigurationTarget.Global);
+      await context.secrets.delete(DROPBOX_TOKEN_KEY);
       void vscode.window.showInformationMessage(
         mode === 'github'
           ? 'Claude Sync: disconnected. To also revoke GitHub access, sign out of GitHub in the Accounts menu.'

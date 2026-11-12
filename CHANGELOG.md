@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- New method **Dropbox (direct)**: sign in once in the browser (OAuth with PKCE) and the extension talks to the Dropbox
+  API itself, so the Dropbox app does not have to be installed. Files live in `Apps/Session Sync for Claude Code`
+  (the app has access to that folder only). The token is kept in VS Code's secret storage and removed by «Disconnect».
+- «Choose sync method» now reports the real storage path instead of «a cloud folder».
+
 ## 0.5.1
 
 - Status-bar item «Claude Sync» and command «Manage connection»: change the sync method or disconnect in one place.

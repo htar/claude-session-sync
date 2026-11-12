@@ -37,11 +37,12 @@ Los comandos están en la Paleta de comandos: **Cmd+Shift+P** (Windows y Linux: 
 
 ## Formas de sincronizar
 
-| Método                        | Necesitas                                                                                  | Qué ocurre                                                                                                                                         |
-| ----------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **GitHub**                    | Una cuenta de GitHub                                                                       | Inicio de sesión con un clic desde VS Code; se crea un repositorio privado `claude-sessions`. Si ya existe uno público con ese nombre, se rechaza. |
-| **Almacenamiento en la nube** | iCloud Drive, Dropbox, OneDrive, Google Drive, MEGA, pCloud, Box, Proton Drive o Nextcloud | Eliges el servicio de una lista, se crea la carpeta «Claude Sessions» en su raíz y el cliente de la nube entrega los archivos.                     |
-| **Tu propio repositorio git** | Un repositorio privado al que tengas acceso (SSH o credential helper)                      | Indica su dirección en `claudeSessionSync.repoUrl`.                                                                                                |
+| Método                        | Necesitas                                                                         | Qué ocurre                                                                                                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub**                    | Una cuenta de GitHub                                                              | Inicio de sesión con un clic desde VS Code; se crea un repositorio privado `claude-sessions`. Si ya existe uno público con ese nombre, se rechaza.             |
+| **Dropbox (directo)**         | Una cuenta de Dropbox                                                             | Inicio de sesión con un clic en el navegador, sin la aplicación de Dropbox en el equipo. Los archivos van a `Apps/Session Sync for Claude Code` en tu Dropbox. |
+| **Almacenamiento en la nube** | iCloud Drive, OneDrive, Google Drive, MEGA, pCloud, Box, Proton Drive o Nextcloud | Eliges el servicio de una lista, se crea la carpeta «Claude Sessions» en su raíz y el cliente de la nube entrega los archivos.                                 |
+| **Tu propio repositorio git** | Un repositorio privado al que tengas acceso (SSH o credential helper)             | Indica su dirección en `claudeSessionSync.repoUrl`.                                                                                                            |
 
 ## Ajustes
 

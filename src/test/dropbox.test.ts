@@ -3,18 +3,9 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import {
-  authorizeUrl,
-  DROPBOX_APP_KEY,
-  DropboxAuthError,
-  DropboxClient,
-  DropboxTransport,
-  exchangeCode,
-  FetchFn,
-  pkcePair,
-  tokenProvider,
-  waitForAuthCode,
-} from '../core/dropbox';
+import { DROPBOX_APP_KEY, DropboxClient, dropboxOAuth } from '../core/dropbox';
+import { exchangeCode, FetchFn, pkcePair, tokenProvider, waitForAuthCode } from '../core/oauth';
+import { CloudAuthError, MirrorTransport } from '../core/remote';
 import { SyncService } from '../core/syncService';
 import { read, tmp, userLine, write } from './helpers';
 
@@ -68,8 +59,8 @@ class FakeDropbox {
 }
 
 const device = (dbx: FakeDropbox, deviceName: string, localDir: string) => {
-  const client = new DropboxClient(dbx.fetch, tokenProvider(dbx.fetch, DROPBOX_APP_KEY, 'good-refresh'));
-  const transport = new DropboxTransport(path.join(tmp(), 'cache'), client);
+  const client = new DropboxClient(dbx.fetch, tokenProvider(dbx.fetch, dropboxOAuth, 'good-refresh'));
+  const transport = new MirrorTransport(path.join(tmp(), 'cache'), client);
   return new SyncService({ transport, localDir, projectKey: 'proj', deviceName });
 };
 
@@ -79,7 +70,7 @@ test('PKCE challenge matches the RFC 7636 example', () => {
 });
 
 test('authorize URL asks for a refresh token with PKCE and the loopback redirect', () => {
-  const u = new URL(authorizeUrl(DROPBOX_APP_KEY, 'ch', 'st'));
+  const u = new URL(dropboxOAuth.authorizeUrl('ch', 'st'));
   assert.equal(u.searchParams.get('client_id'), DROPBOX_APP_KEY);
   assert.equal(u.searchParams.get('token_access_type'), 'offline');
   assert.equal(u.searchParams.get('code_challenge_method'), 'S256');
@@ -88,7 +79,7 @@ test('authorize URL asks for a refresh token with PKCE and the loopback redirect
 });
 
 test('exchangeCode returns the refresh token', async () => {
-  const t = await exchangeCode(new FakeDropbox().fetch, DROPBOX_APP_KEY, 'code', 'verifier', () => 1000);
+  const t = await exchangeCode(new FakeDropbox().fetch, dropboxOAuth, 'code', 'verifier', () => 1000);
   assert.equal(t.refreshToken, 'good-refresh');
   assert.equal(t.expiresAt, 1000 + 14400 * 1000);
 });
@@ -96,7 +87,7 @@ test('exchangeCode returns the refresh token', async () => {
 test('token provider caches the access token and refreshes it near expiry', async () => {
   const dbx = new FakeDropbox();
   let now = 0;
-  const get = tokenProvider(dbx.fetch, DROPBOX_APP_KEY, 'good-refresh', () => now);
+  const get = tokenProvider(dbx.fetch, dropboxOAuth, 'good-refresh', undefined, () => now);
   assert.equal(await get(), 'access-1');
   assert.equal(await get(), 'access-1');
   now = 14400 * 1000;
@@ -105,14 +96,14 @@ test('token provider caches the access token and refreshes it near expiry', asyn
 
 test('a revoked refresh token is reported as an auth error', async () => {
   const dbx = new FakeDropbox();
-  await assert.rejects(tokenProvider(dbx.fetch, DROPBOX_APP_KEY, 'revoked')(), DropboxAuthError);
+  await assert.rejects(tokenProvider(dbx.fetch, dropboxOAuth, 'revoked')(), CloudAuthError);
 });
 
 test('a rejected access token is an auth error, not a silent failure', async () => {
   const dbx = new FakeDropbox();
   dbx.expireAccessTokens = true;
   const client = new DropboxClient(dbx.fetch, () => Promise.resolve('x'));
-  await assert.rejects(client.list(), DropboxAuthError);
+  await assert.rejects(client.list(), CloudAuthError);
 });
 
 test('push on one device, pull on another, through Dropbox', async () => {
@@ -182,24 +173,33 @@ const callback = (port: number, query: string): Promise<number> =>
 
 test('the loopback server returns the code when the state matches', async () => {
   const port = 53790;
-  const code = waitForAuthCode('st', () => void callback(port, 'code=abc&state=st'), { port });
+  const code = waitForAuthCode(
+    'st',
+    `http://127.0.0.1:${port}/callback`,
+    () => void callback(port, 'code=abc&state=st'),
+  );
   assert.equal(await code, 'abc');
 });
 
 test('the loopback server refuses a wrong state', async () => {
   const port = 53791;
-  const code = waitForAuthCode('st', () => void callback(port, 'code=abc&state=evil'), { port });
-  await assert.rejects(code, DropboxAuthError);
+  const code = waitForAuthCode(
+    'st',
+    `http://127.0.0.1:${port}/callback`,
+    () => void callback(port, 'code=abc&state=evil'),
+  );
+  await assert.rejects(code, CloudAuthError);
 });
 
 test('the loopback server stops waiting when cancelled', async () => {
   const ctl = new AbortController();
   const code = waitForAuthCode(
     'st',
+    'http://127.0.0.1:53792/callback',
     () => {
       ctl.abort();
     },
-    { port: 53792, signal: ctl.signal },
+    { signal: ctl.signal },
   );
   await assert.rejects(code, /cancelled/);
 });

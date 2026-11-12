@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- New method **OneDrive (direct)**: the same browser sign-in as Dropbox, through the Microsoft Graph API (the app folder
+  `Apps/Session Sync for Claude Code`, scope `Files.ReadWrite.AppFolder`). Files over 4 MB go through an upload
+  session. Microsoft rotates the refresh token, so the new one is saved on every refresh.
+- Internals: one OAuth module and one local-cache transport shared by all direct cloud methods.
+
 ## 0.6.0
 
 - New method **Dropbox (direct)**: sign in once in the browser (OAuth with PKCE) and the extension talks to the Dropbox

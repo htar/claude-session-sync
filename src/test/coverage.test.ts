@@ -102,7 +102,7 @@ test('CLOUDS: providers expose stores and OAuth settings; isCloudId guards unkno
   assert.equal(CLOUDS.onedrive.oauth, onedriveOAuth);
 });
 
-test.skip('BUG: isCloudId accepts inherited property names like "toString" (uses `in` on a plain object)', () => {
+test('isCloudId rejects inherited property names like "toString"', () => {
   assert.equal(isCloudId('toString'), false);
   assert.equal(isCloudId('__proto__'), false);
 });

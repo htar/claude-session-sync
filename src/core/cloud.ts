@@ -32,4 +32,4 @@ export const CLOUDS: Record<CloudId, CloudProvider> = {
   },
 };
 
-export const isCloudId = (v: unknown): v is CloudId => typeof v === 'string' && v in CLOUDS;
+export const isCloudId = (v: unknown): v is CloudId => typeof v === 'string' && Object.prototype.hasOwnProperty.call(CLOUDS, v);

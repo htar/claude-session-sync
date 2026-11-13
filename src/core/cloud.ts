@@ -1,5 +1,5 @@
 import { dropboxOAuth, DropboxClient } from './dropbox';
-import { FetchFn, OAuthConfig } from './oauth';
+import { FetchFn, OAuthConfig, TokenFn } from './oauth';
 import { onedriveOAuth, OneDriveClient } from './onedrive';
 import { RemoteStore } from './remote';
 
@@ -12,7 +12,7 @@ export interface CloudProvider {
   /** Where the files end up, for messages. */
   where: string;
   oauth: OAuthConfig;
-  store: (fetchFn: FetchFn, token: () => Promise<string>) => RemoteStore;
+  store: (fetchFn: FetchFn, token: TokenFn) => RemoteStore;
 }
 
 export const CLOUDS: Record<CloudId, CloudProvider> = {

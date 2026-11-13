@@ -1,4 +1,4 @@
-import { FetchFn, OAuthConfig } from './oauth';
+import { FetchFn, OAuthConfig, TokenFn } from './oauth';
 import { CloudAuthError, RemoteFile, RemoteStore } from './remote';
 
 /** Public identifier of the «Session Sync for Claude Code» Dropbox app (App folder access: only `Apps/<name>`). */
@@ -31,15 +31,19 @@ const headerJson = (v: unknown): string =>
 export class DropboxClient implements RemoteStore {
   constructor(
     private readonly fetchFn: FetchFn,
-    private readonly token: () => Promise<string>,
+    private readonly token: TokenFn,
   ) {}
 
   private async call(url: string, init: { headers?: Record<string, string>; body?: BodyInit }): Promise<Response> {
-    const res = await this.fetchFn(url, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${await this.token()}`, ...init.headers },
-      body: init.body,
-    });
+    const send = async (fresh: boolean) =>
+      this.fetchFn(url, {
+        method: 'POST',
+        body: init.body,
+        headers: { authorization: `Bearer ${await this.token({ fresh })}`, ...init.headers },
+      });
+    // An access token can be revoked before it expires: get a new one and try once more before asking to sign in.
+    let res = await send(false);
+    if (res.status === 401) res = await send(true);
     if (res.status === 401) throw new CloudAuthError('Dropbox rejected the sign-in. Sign in again.');
     return res;
   }

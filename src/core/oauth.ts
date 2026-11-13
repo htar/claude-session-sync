@@ -74,6 +74,9 @@ export async function exchangeCode(
   };
 }
 
+/** An access token; `fresh` skips the cached one (the service has just rejected it). */
+export type TokenFn = (opts?: { fresh?: boolean }) => Promise<string>;
+
 /**
  * Hands out a valid access token, refreshing it from the stored refresh token when it is about to expire.
  * Some services (Microsoft) rotate the refresh token on every refresh: `onRefreshToken` stores the new one.
@@ -84,11 +87,11 @@ export function tokenProvider(
   refreshToken: string,
   onRefreshToken: (token: string) => void | Promise<void> = () => undefined,
   now: () => number = Date.now,
-): () => Promise<string> {
+): TokenFn {
   let current = refreshToken;
   let cached: { token: string; expiresAt: number } | undefined;
-  return async () => {
-    if (cached && cached.expiresAt - EXPIRY_MARGIN_MS > now()) return cached.token;
+  return async (opts) => {
+    if (!opts?.fresh && cached && cached.expiresAt - EXPIRY_MARGIN_MS > now()) return cached.token;
     const t = await tokenRequest(fetchFn, cfg, { grant_type: 'refresh_token', refresh_token: current });
     if (t.refresh_token && t.refresh_token !== current) {
       current = t.refresh_token;

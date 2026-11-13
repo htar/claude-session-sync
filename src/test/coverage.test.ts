@@ -29,6 +29,7 @@ import {
   randomState,
   signIn,
   tokenProvider,
+  TokenFn,
   waitForAuthCode,
 } from '../core/oauth';
 import { onedriveOAuth, OneDriveClient, CHUNK, SIMPLE_UPLOAD_MAX } from '../core/onedrive';
@@ -1555,4 +1556,34 @@ test('waitForAuthCode: requests without the right state get 400 and the sign-in 
   }
   assert.equal((await get(`${uri}?code=REAL&state=S`)).status, 200);
   assert.equal(await p, 'REAL');
+});
+
+test('a rejected access token is refreshed once before the user is asked to sign in again', async () => {
+  for (const make of [
+    (f: FetchFn, t: TokenFn) => new DropboxClient(f, t),
+    (f: FetchFn, t: TokenFn) => new OneDriveClient(f, t),
+  ]) {
+    const asked: boolean[] = [];
+    const token: TokenFn = (opts) => {
+      asked.push(opts?.fresh === true);
+      return Promise.resolve(opts?.fresh ? 'NEW' : 'OLD');
+    };
+    const fetchFn: FetchFn = (_input, init) => {
+      const auth = new Headers(init?.headers).get('authorization');
+      return Promise.resolve(
+        new Response(auth === 'Bearer NEW' ? '' : 'expired', { status: auth === 'Bearer NEW' ? 200 : 401 }),
+      );
+    };
+    await make(fetchFn, token).upload('a.jsonl', Buffer.from('x'));
+    assert.deepEqual(asked, [false, true]);
+  }
+});
+
+test('tokenProvider: fresh skips the cached access token', async () => {
+  let n = 0;
+  const fetchFn: FetchFn = () => Promise.resolve(Response.json({ access_token: `T${++n}`, expires_in: 3600 }));
+  const token = tokenProvider(fetchFn, dropboxOAuth, 'R');
+  assert.equal(await token(), 'T1');
+  assert.equal(await token(), 'T1');
+  assert.equal(await token({ fresh: true }), 'T2');
 });

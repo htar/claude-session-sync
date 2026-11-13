@@ -1,4 +1,4 @@
-import { FetchFn, OAuthConfig } from './oauth';
+import { FetchFn, OAuthConfig, TokenFn } from './oauth';
 import { CloudAuthError, RemoteFile, RemoteStore } from './remote';
 
 /** Public identifier of the «Session Sync for Claude Code» Microsoft app (Files.ReadWrite.AppFolder: `Apps/<name>`). */
@@ -48,14 +48,18 @@ interface Page {
 export class OneDriveClient implements RemoteStore {
   constructor(
     private readonly fetchFn: FetchFn,
-    private readonly token: () => Promise<string>,
+    private readonly token: TokenFn,
   ) {}
 
   private async call(url: string, init: { method: string; headers?: Record<string, string>; body?: BodyInit }) {
-    const res = await this.fetchFn(url, {
-      ...init,
-      headers: { authorization: `Bearer ${await this.token()}`, ...init.headers },
-    });
+    const send = async (fresh: boolean) =>
+      this.fetchFn(url, {
+        ...init,
+        headers: { authorization: `Bearer ${await this.token({ fresh })}`, ...init.headers },
+      });
+    // An access token can be revoked before it expires: get a new one and try once more before asking to sign in.
+    let res = await send(false);
+    if (res.status === 401) res = await send(true);
     if (res.status === 401) throw new CloudAuthError('OneDrive rejected the sign-in. Sign in again.');
     return res;
   }

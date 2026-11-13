@@ -32,7 +32,9 @@
     "github"
   ],
   "main": "./dist/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
@@ -65,6 +67,11 @@
       {
         "command": "claudeSessionSync.manage",
         "title": "Manage connection (change method, disconnect)",
+        "category": "Claude Sync"
+      },
+      {
+        "command": "claudeSessionSync.showLog",
+        "title": "Show log",
         "category": "Claude Sync"
       },
       {

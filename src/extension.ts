@@ -779,8 +779,15 @@ export function activate(context: vscode.ExtensionContext): void {
         `Claude Sync: deleted ${removed} stored session(s) of «${deviceLabel(from)}».`,
       );
     }),
-    command('resume', async (s) => {
-      const sessions = listSessions(s.localDir);
+    // Resuming only reads local files: no storage, network or sign-in needed.
+    vscode.commands.registerCommand(`${SECTION}.resume`, async () => {
+      const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!folder) {
+        void vscode.window.showErrorMessage('Claude Sync: open a folder first.');
+        return;
+      }
+      const claudeDir = vscode.workspace.getConfiguration(SECTION).get<string>('claudeDir', '').trim();
+      const sessions = listSessions(path.join(claudeProjectsDir(claudeDir), encodeProjectDir(folder)));
       if (!sessions.length) {
         void vscode.window.showInformationMessage('Claude Sync: no local sessions. Run «Pull sessions» first.');
         return;
@@ -794,7 +801,12 @@ export function activate(context: vscode.ExtensionContext): void {
         { placeHolder: 'Choose a session to resume', matchOnDetail: true },
       );
       if (!pick?.detail) return;
-      const terminal = vscode.window.createTerminal({ name: 'Claude (resumed)', cwd: s.folder });
+      const terminal = vscode.window.createTerminal({
+        name: 'Claude (resumed)',
+        cwd: folder,
+        // A custom Claude folder must reach Claude Code too, or it would look for the session in ~/.claude.
+        env: claudeDir ? { CLAUDE_CONFIG_DIR: claudeDir } : undefined,
+      });
       terminal.show();
       terminal.sendText(`claude --resume ${pick.detail}`);
     }),

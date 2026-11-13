@@ -390,7 +390,7 @@ test('waitForAuthCode: a request for another path gets 404 and the wait goes on'
 });
 
 test('waitForAuthCode: a missing code with the right state and an error reply are both refused', async () => {
-  for (const q of ['?state=S', '?error=access_denied&state=S', '?code=C', '']) {
+  for (const q of ['?state=S', '?error=access_denied&state=S']) {
     const port = await freePort();
     const uri = `http://127.0.0.1:${port}/cb`;
     let listening!: () => void;
@@ -1541,4 +1541,18 @@ test('defaultDeviceName drops «.local» and never falls back to a shared «devi
   assert.equal(defaultDeviceName('MacBook-Pro.local', 'abcdef123456'), 'MacBook-Pro');
   assert.equal(defaultDeviceName('DESKTOP-42', 'abcdef123456'), 'DESKTOP-42');
   assert.equal(defaultDeviceName('Ноутбук', 'abcdef123456'), 'device-abcdef12');
+});
+
+test('waitForAuthCode: requests without the right state get 400 and the sign-in keeps waiting', async () => {
+  const port = await freePort();
+  const uri = `http://127.0.0.1:${port}/cb`;
+  let listening!: () => void;
+  const ready = new Promise<void>((r) => (listening = r));
+  const p = waitForAuthCode('S', uri, listening);
+  await ready;
+  for (const q of ['?code=C', '', '?code=C&state=evil', '?error=access_denied&state=evil']) {
+    assert.equal((await get(`${uri}${q}`)).status, 400, q);
+  }
+  assert.equal((await get(`${uri}?code=REAL&state=S`)).status, 200);
+  assert.equal(await p, 'REAL');
 });

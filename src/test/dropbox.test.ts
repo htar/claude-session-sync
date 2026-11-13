@@ -181,14 +181,15 @@ test('the loopback server returns the code when the state matches', async () => 
   assert.equal(await code, 'abc');
 });
 
-test('the loopback server refuses a wrong state', async () => {
+test('a wrong state is refused but does not end the sign-in', async () => {
   const port = 53791;
-  const code = waitForAuthCode(
-    'st',
-    `http://127.0.0.1:${port}/callback`,
-    () => void callback(port, 'code=abc&state=evil'),
-  );
-  await assert.rejects(code, CloudAuthError);
+  const code = waitForAuthCode('st', `http://127.0.0.1:${port}/callback`, () => {
+    void (async () => {
+      assert.equal(await callback(port, 'code=abc&state=evil'), 400);
+      assert.equal(await callback(port, 'code=real&state=st'), 200);
+    })();
+  });
+  assert.equal(await code, 'real');
 });
 
 test('the loopback server stops waiting when cancelled', async () => {

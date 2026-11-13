@@ -126,7 +126,13 @@ export function waitForAuthCode(
         return;
       }
       const code = url.searchParams.get('code');
-      const ok = code !== null && url.searchParams.get('state') === state;
+      // Anything on the machine can call this port: a request without our state is not the browser's answer, so it
+      // must not end the sign-in the user is still finishing.
+      if (url.searchParams.get('state') !== state) {
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' }).end('This sign-in link is not current.');
+        return;
+      }
+      const ok = code !== null;
       res.writeHead(ok ? 200 : 400, { 'content-type': 'text/plain; charset=utf-8' });
       res.end(
         ok ? 'Signed in. You can close this tab and return to VS Code.' : 'Sign-in was refused or did not match.',
@@ -147,7 +153,10 @@ export function waitForAuthCode(
       finished = true;
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
-      for (const s of servers) s.close();
+      for (const s of servers) {
+        s.close();
+        s.closeAllConnections(); // a browser's keep-alive would hold the port until it times out
+      }
       if (err || !code) reject(err ?? new Error('No code received.'));
       else resolve(code);
     }

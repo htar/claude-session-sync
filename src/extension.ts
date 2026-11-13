@@ -557,6 +557,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   /** Two operations at once would use the same local cache. A stale lock (an unanswered dialog) expires. */
   let busySince = 0;
+  /** Changing or dropping the method while a push or pull uses its cache would corrupt that cache. */
+  const refuseWhileBusy = (): boolean => {
+    if (!busySince || Date.now() - busySince >= BUSY_STALE_MS) return false;
+    void vscode.window.showInformationMessage('Claude Sync: another Claude Sync operation is still running.');
+    return true;
+  };
 
   const advise = async (kind: 'network' | 'full'): Promise<boolean> => {
     const pick = await vscode.window.showErrorMessage(
@@ -574,10 +580,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const command = (id: string, body: (s: Session) => Promise<void>, before?: () => Promise<boolean>) =>
     vscode.commands.registerCommand(`${SECTION}.${id}`, async () => {
-      if (busySince && Date.now() - busySince < BUSY_STALE_MS) {
-        void vscode.window.showInformationMessage('Claude Sync: another Claude Sync operation is still running.');
-        return;
-      }
+      if (refuseWhileBusy()) return;
       busySince = Date.now();
       try {
         let reconnected = false;
@@ -688,6 +691,7 @@ export function activate(context: vscode.ExtensionContext): void {
       () => confirmFirstPush(context),
     ),
     vscode.commands.registerCommand(`${SECTION}.chooseMode`, async () => {
+      if (refuseWhileBusy()) return;
       const cfg = vscode.workspace.getConfiguration(SECTION);
       const previous = { mode: cfg.get<string>('mode', ''), syncFolder: cfg.get<string>('syncFolder', '') };
       // A sign-in or storage pick that was cancelled must not leave the old, working method forgotten.
@@ -720,6 +724,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(`Claude Sync: now using ${where}.`);
     }),
     vscode.commands.registerCommand(`${SECTION}.disconnect`, async () => {
+      if (refuseWhileBusy()) return;
       const cfg = vscode.workspace.getConfiguration(SECTION);
       const mode = cfg.get<string>('mode');
       if (!isMode(mode)) {

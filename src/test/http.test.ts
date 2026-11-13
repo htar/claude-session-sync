@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { classifyError } from '../core/errors';
+import { classifyError, redactSecrets } from '../core/errors';
 import { retryingFetch } from '../core/http';
 import { FetchFn } from '../core/oauth';
 
@@ -66,4 +66,21 @@ test('errors are told apart: no connection, storage full, anything else', () => 
   );
   assert.equal(classifyError('OneDrive upload of a failed (507): insufficientStorage'), 'full');
   assert.equal(classifyError('Something else broke'), 'other');
+});
+
+test('access errors are told apart from network errors and from a local EACCES', () => {
+  assert.equal(classifyError("fatal: unable to access 'https://x/': The requested URL returned error: 403"), 'access');
+  assert.equal(classifyError('git@github.com: Permission denied (publickey).'), 'access');
+  assert.equal(classifyError('Sync folder not found: /x'), 'access');
+  assert.equal(classifyError("EACCES: permission denied, open '/x'"), 'other');
+});
+
+test('credentials never reach the log or a notification', () => {
+  assert.equal(
+    redactSecrets("fatal: unable to access 'https://user:s3cret@host/o/r.git/'"),
+    "fatal: unable to access 'https://***@host/o/r.git/'",
+  );
+  assert.equal(redactSecrets('Authorization: Bearer abc.def-123'), 'Authorization: Bearer ***');
+  assert.equal(redactSecrets(`token ghp_${'a'.repeat(36)} used`), 'token *** used');
+  assert.equal(redactSecrets('nothing to hide'), 'nothing to hide');
 });

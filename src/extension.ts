@@ -7,7 +7,7 @@ import { isValidRepoUrl, remoteOf } from './core/git';
 import { DeviceInfo } from './core/devices';
 import { ensureSyncFolder, STORAGES, storageRoots } from './core/storages';
 import { CLOUDS, CloudId, CloudProvider, isCloudId } from './core/cloud';
-import { classifyError } from './core/errors';
+import { classifyError, redactSecrets } from './core/errors';
 import { retryingFetch } from './core/http';
 import { signIn, tokenProvider } from './core/oauth';
 import { MirrorTransport } from './core/remote';
@@ -49,7 +49,7 @@ const SECTION = 'claudeSessionSync';
 
 function channelLogger(channel: vscode.OutputChannel): Logger {
   const write = (level: string) => (m: string) => {
-    channel.appendLine(`[${new Date().toISOString()}] ${level} ${m}`);
+    channel.appendLine(`[${new Date().toISOString()}] ${level} ${redactSecrets(m)}`);
   };
   return { info: write('INFO'), warn: write('WARN'), error: write('ERROR') };
 }
@@ -98,10 +98,7 @@ const RESUME = 'Resume a session';
 const RELOAD = 'Reload window';
 
 /** Errors that mean «cannot reach or not signed in», as opposed to a bug. */
-const isAccessError = (m: string): boolean =>
-  /Sync folder not found|HTTP 40[13]|authentication failed|could not read (username|password)|permission denied|not authorized|repository not found|sign.?in|rejected the sign-in/i.test(
-    m,
-  );
+const isAccessError = (m: string): boolean => classifyError(m) === 'access';
 
 /** Step text for the notification that is open right now («Downloading 3/12: …»). */
 let currentStep: ((message: string) => void) | undefined;
@@ -592,7 +589,7 @@ export function activate(context: vscode.ExtensionContext): void {
             return;
           } catch (e) {
             if (e instanceof RetryCommand) continue;
-            const message = e instanceof Error ? e.message : String(e);
+            const message = redactSecrets(e instanceof Error ? e.message : String(e));
             log.error(message);
             if (!reconnected && isAccessError(message)) {
               reconnected = true;
@@ -600,7 +597,7 @@ export function activate(context: vscode.ExtensionContext): void {
               return;
             }
             const kind = classifyError(message);
-            if (kind !== 'other') {
+            if (kind === 'network' || kind === 'full') {
               if (await advise(kind)) continue;
               return;
             }

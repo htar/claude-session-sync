@@ -72,7 +72,12 @@ const cfgFor = (extra: Partial<OAuthConfig> = {}): OAuthConfig => ({
 // ---------------------------------------------------------------- errors / logger / cloud
 
 test('classifyError: network, full storage, other, and full wins over network', () => {
-  for (const m of ['fetch failed', 'getaddrinfo ENOTFOUND x', 'connect ECONNREFUSED', 'Could not resolve host: github.com'])
+  for (const m of [
+    'fetch failed',
+    'getaddrinfo ENOTFOUND x',
+    'connect ECONNREFUSED',
+    'Could not resolve host: github.com',
+  ])
     assert.equal(classifyError(m), 'network', m);
   for (const m of ['insufficient_space', 'No space left on device', 'quotaLimitReached', 'storage quota exceeded'])
     assert.equal(classifyError(m), 'full', m);
@@ -256,27 +261,55 @@ test('exchangeCode sends the PKCE verifier and tokenParams, computes expiry', as
 });
 
 test('exchangeCode: no refresh token, missing expires_in, 5xx, 403, corrupt JSON', async () => {
-  const mk = (res: () => Response): FetchFn => () => Promise.resolve(res());
-  await assert.rejects(exchangeCode(mk(() => json({ access_token: 'a' })), cfgFor(), 'c', 'v'), /refresh token/);
-  const t = await exchangeCode(mk(() => json({ access_token: 'a', refresh_token: 'r' })), cfgFor(), 'c', 'v', () => 5);
+  const mk =
+    (res: () => Response): FetchFn =>
+    () =>
+      Promise.resolve(res());
+  await assert.rejects(
+    exchangeCode(
+      mk(() => json({ access_token: 'a' })),
+      cfgFor(),
+      'c',
+      'v',
+    ),
+    /refresh token/,
+  );
+  const t = await exchangeCode(
+    mk(() => json({ access_token: 'a', refresh_token: 'r' })),
+    cfgFor(),
+    'c',
+    'v',
+    () => 5,
+  );
   assert.equal(t.expiresAt, 5);
   for (const status of [500, 503, 403, 429]) {
-    const err = await exchangeCode(mk(() => json({ error: 'x' }, status)), cfgFor(), 'c', 'v').catch((e: unknown) => e);
+    const err = await exchangeCode(
+      mk(() => json({ error: 'x' }, status)),
+      cfgFor(),
+      'c',
+      'v',
+    ).catch((e: unknown) => e);
     assert.ok(err instanceof Error && !(err instanceof CloudAuthError), String(status));
-    assert.match((err).message, new RegExp(String(status)));
+    assert.match(err.message, new RegExp(String(status)));
   }
   for (const status of [400, 401]) {
-    const err = await exchangeCode(mk(() => json({ error: 'invalid_grant' }, status)), cfgFor(), 'c', 'v').catch(
-      (e: unknown) => e,
-    );
+    const err = await exchangeCode(
+      mk(() => json({ error: 'invalid_grant' }, status)),
+      cfgFor(),
+      'c',
+      'v',
+    ).catch((e: unknown) => e);
     assert.ok(err instanceof CloudAuthError);
-    assert.match((err).message, /invalid_grant/);
+    assert.match(err.message, /invalid_grant/);
   }
-  const bad = await exchangeCode(mk(() => new Response('<html>', { status: 200 })), cfgFor(), 'c', 'v').catch(
-    (e: unknown) => e,
-  );
+  const bad = await exchangeCode(
+    mk(() => new Response('<html>', { status: 200 })),
+    cfgFor(),
+    'c',
+    'v',
+  ).catch((e: unknown) => e);
   assert.ok(bad instanceof Error);
-  assert.match((bad).message, /200/);
+  assert.match(bad.message, /200/);
 });
 
 test('exchangeCode: a network failure propagates', async () => {
@@ -296,7 +329,13 @@ test('tokenProvider: refreshes inside the expiry margin, stores rotated refresh 
     return Promise.resolve(json({ access_token: `a${n}`, refresh_token: n === 1 ? 'r2' : 'r2', expires_in: 3600 }));
   };
   const stored: string[] = [];
-  const get = tokenProvider(f, cfgFor(), 'r1', (t) => void stored.push(t), () => clock);
+  const get = tokenProvider(
+    f,
+    cfgFor(),
+    'r1',
+    (t) => void stored.push(t),
+    () => clock,
+  );
   assert.equal(await get(), 'a1');
   clock = 3_000_000; // still valid (3600s - 60s margin)
   assert.equal(await get(), 'a1');
@@ -360,9 +399,15 @@ test('waitForAuthCode: a missing code with the right state and an error reply ar
 test('waitForAuthCode: times out and frees the port', async () => {
   const port = await freePort();
   const uri = `http://127.0.0.1:${port}/cb`;
-  await assert.rejects(waitForAuthCode('S', uri, () => undefined, { timeoutMs: 30 }), /timed out/);
+  await assert.rejects(
+    waitForAuthCode('S', uri, () => undefined, { timeoutMs: 30 }),
+    /timed out/,
+  );
   // the port is free again
-  await assert.rejects(waitForAuthCode('S', uri, () => undefined, { timeoutMs: 20 }), /timed out/);
+  await assert.rejects(
+    waitForAuthCode('S', uri, () => undefined, { timeoutMs: 20 }),
+    /timed out/,
+  );
 });
 
 test('waitForAuthCode: a busy port gives a clear message', async () => {
@@ -382,7 +427,14 @@ test('waitForAuthCode: a busy port gives a clear message', async () => {
 test('waitForAuthCode: an already aborted signal is not noticed until abort fires (cancel later works)', async () => {
   const port = await freePort();
   const ac = new AbortController();
-  const p = waitForAuthCode('S', `http://127.0.0.1:${port}/cb`, () => { ac.abort(); }, { signal: ac.signal });
+  const p = waitForAuthCode(
+    'S',
+    `http://127.0.0.1:${port}/cb`,
+    () => {
+      ac.abort();
+    },
+    { signal: ac.signal },
+  );
   await assert.rejects(p, /cancelled/);
 });
 
@@ -424,7 +476,14 @@ test('signIn: a cancelled sign-in never calls the token endpoint', async () => {
     return Promise.resolve(json({}));
   };
   await assert.rejects(
-    signIn(f, cfgFor({ redirectUri: `http://127.0.0.1:${port}/cb` }), () => { ac.abort(); }, { signal: ac.signal }),
+    signIn(
+      f,
+      cfgFor({ redirectUri: `http://127.0.0.1:${port}/cb` }),
+      () => {
+        ac.abort();
+      },
+      { signal: ac.signal },
+    ),
     /cancelled/,
   );
   assert.equal(called, false);
@@ -446,7 +505,8 @@ test('safeDeviceName: unicode, traversal, empty, long, dots', () => {
 });
 
 test('isSafeDeviceDir rejects traversal, separators, empty and over-long names', () => {
-  for (const n of ['', '..', '.', 'a/b', 'a\\b', '-x', '.x', 'a..b', 'a'.repeat(65), 'a b']) assert.equal(isSafeDeviceDir(n), false, n);
+  for (const n of ['', '..', '.', 'a/b', 'a\\b', '-x', '.x', 'a..b', 'a'.repeat(65), 'a b'])
+    assert.equal(isSafeDeviceDir(n), false, n);
   for (const n of ['a', 'MacBook-Pro.local', 'a'.repeat(64), 'x_1']) assert.equal(isSafeDeviceDir(n), true, n);
 });
 
@@ -477,13 +537,21 @@ test('Windows: Google Drive on a drive letter, Dropbox info.json (APPDATA, LOCAL
   const home = tmp();
   const dbx = path.join(home, 'DbxData');
   fs.mkdirSync(dbx);
-  write(path.join(home, 'AppData', 'Dropbox'), 'info.json', JSON.stringify({ personal: { path: dbx }, business: null }));
+  write(
+    path.join(home, 'AppData', 'Dropbox'),
+    'info.json',
+    JSON.stringify({ personal: { path: dbx }, business: null }),
+  );
   const other = path.join(home, 'Other');
   fs.mkdirSync(other);
   write(path.join(home, 'Local', 'Dropbox'), 'info.json', JSON.stringify({ business: { path: other } }));
   const dbxStorage = STORAGES.find((s) => s.id === 'dropbox');
   assert.ok(dbxStorage);
-  const env = { home, platform: 'win32' as const, env: { APPDATA: path.join(home, 'AppData'), LOCALAPPDATA: path.join(home, 'Local') } };
+  const env = {
+    home,
+    platform: 'win32' as const,
+    env: { APPDATA: path.join(home, 'AppData'), LOCALAPPDATA: path.join(home, 'Local') },
+  };
   assert.deepEqual(storageRoots(dbxStorage, env), [dbx, other]);
 });
 
@@ -493,7 +561,11 @@ test('Dropbox info.json: corrupt, wrong shapes and non-string paths are ignored;
   const home = tmp();
   write(path.join(home, '.dropbox'), 'info.json', '{not json');
   assert.deepEqual(storageRoots(dbxStorage, { home, platform: 'linux', env: {} }), []);
-  write(path.join(home, '.dropbox'), 'info.json', JSON.stringify({ a: { path: 5 }, b: [], c: 'x', d: { path: path.join(home, 'nope') } }));
+  write(
+    path.join(home, '.dropbox'),
+    'info.json',
+    JSON.stringify({ a: { path: 5 }, b: [], c: 'x', d: { path: path.join(home, 'nope') } }),
+  );
   assert.deepEqual(storageRoots(dbxStorage, { home, platform: 'linux', env: {} }), []);
   fs.mkdirSync(path.join(home, 'Dropbox'));
   write(path.join(home, '.dropbox'), 'info.json', JSON.stringify({ a: { path: path.join(home, 'Dropbox') } }));
@@ -587,7 +659,10 @@ test('GitTransport: progress messages, credentials per call, clone + publish rou
 });
 
 test('GitTransport: an invalid URL is refused before git runs', async () => {
-  await assert.rejects(new GitTransport(path.join(tmp(), 'c'), '--upload-pack=x').refresh(), /Unsupported repository URL/);
+  await assert.rejects(
+    new GitTransport(path.join(tmp(), 'c'), '--upload-pack=x').refresh(),
+    /Unsupported repository URL/,
+  );
 });
 
 // ---------------------------------------------------------------- git
@@ -634,13 +709,14 @@ test('pullRepo picks up a branch that appeared after an empty clone, and normal 
 
 // ---------------------------------------------------------------- github
 
-const ghFetch = (routes: Record<string, () => Response>, seen: { url: string; init?: RequestInit }[] = []): typeof fetch =>
-  ((input: string | URL | Request, init?: RequestInit) => {
+const ghFetch =
+  (routes: Record<string, () => Response>, seen: { url: string; init?: RequestInit }[] = []): typeof fetch =>
+  (input: string | URL | Request, init?: RequestInit) => {
     const url = (input instanceof Request ? input.url : input.toString()).replace('https://api.github.com', '');
     seen.push({ url, init });
     const r = routes[url];
     return Promise.resolve(r ? r() : new Response('', { status: 404 }));
-  });
+  };
 
 test('githubAuthEnv puts the token in the environment as a Basic header, not in argv', () => {
   const env = githubAuthEnv('tok');
@@ -670,11 +746,17 @@ test('ensurePrivateRepo: existing private repo, creation, public refusal, HTTP e
     PublicRepoError,
   );
   await assert.rejects(
-    ensurePrivateRepo('t', ghFetch({ '/user': me, '/user/repos': () => json({ clone_url: 'x', private: false }, 201) })),
+    ensurePrivateRepo(
+      't',
+      ghFetch({ '/user': me, '/user/repos': () => json({ clone_url: 'x', private: false }, 201) }),
+    ),
     PublicRepoError,
   );
   for (const status of [401, 403, 429, 500]) {
-    await assert.rejects(ensurePrivateRepo('t', ghFetch({ '/user': () => json({}, status) })), new RegExp(`HTTP ${status}`));
+    await assert.rejects(
+      ensurePrivateRepo('t', ghFetch({ '/user': () => json({}, status) })),
+      new RegExp(`HTTP ${status}`),
+    );
     await assert.rejects(
       ensurePrivateRepo('t', ghFetch({ '/user': me, [repoPath]: () => json({}, status) })),
       new RegExp(`cannot read bob/${SYNC_REPO_NAME} \\(HTTP ${status}`),
@@ -684,7 +766,10 @@ test('ensurePrivateRepo: existing private repo, creation, public refusal, HTTP e
     ensurePrivateRepo('t', ghFetch({ '/user': me, '/user/repos': () => json({}, 422) })),
     /cannot create .*422/,
   );
-  await assert.rejects(ensurePrivateRepo('t', (() => Promise.reject(new TypeError('fetch failed')))), /fetch failed/);
+  await assert.rejects(
+    ensurePrivateRepo('t', () => Promise.reject(new TypeError('fetch failed'))),
+    /fetch failed/,
+  );
 });
 
 // ---------------------------------------------------------------- remote (MirrorTransport)
@@ -744,7 +829,8 @@ test('MirrorTransport: refresh downloads, replaces differing sizes, deletes loca
 
 test('MirrorTransport: traversal names, empty segments and absolute-looking names are never written', async () => {
   const store = new MemStore();
-  for (const rel of ['../evil', 'a/../../evil', 'a//b', '/abs', 'a/./b', '..', '']) store.files.set(rel, Buffer.from('x'));
+  for (const rel of ['../evil', 'a/../../evil', 'a//b', '/abs', 'a/./b', '..', ''])
+    store.files.set(rel, Buffer.from('x'));
   store.files.set('ok.jsonl', Buffer.from('x'));
   const parent = tmp();
   const root = path.join(parent, 'cache');
@@ -854,12 +940,24 @@ test('DropboxClient: pagination through list_folder/continue, folders skipped, l
 test('DropboxClient: 401 is an auth error, 403/429/5xx are plain errors with the status, 409 on delete is fine', async () => {
   for (const op of ['list', 'download', 'upload', 'remove'] as const) {
     const call = (c: DropboxClient) =>
-      op === 'list' ? c.list() : op === 'download' ? c.download('a') : op === 'upload' ? c.upload('a', Buffer.from('x')) : c.remove('a');
-    await assert.rejects(call(new DropboxClient(rec(() => new Response('', { status: 401 })).fetchFn, tok)), CloudAuthError, op);
+      op === 'list'
+        ? c.list()
+        : op === 'download'
+          ? c.download('a')
+          : op === 'upload'
+            ? c.upload('a', Buffer.from('x'))
+            : c.remove('a');
+    await assert.rejects(
+      call(new DropboxClient(rec(() => new Response('', { status: 401 })).fetchFn, tok)),
+      CloudAuthError,
+      op,
+    );
     for (const status of [403, 429, 500, 503]) {
-      const err = await call(new DropboxClient(rec(() => new Response('nope', { status })).fetchFn, tok)).catch((e: unknown) => e);
+      const err = await call(new DropboxClient(rec(() => new Response('nope', { status })).fetchFn, tok)).catch(
+        (e: unknown) => e,
+      );
       assert.ok(err instanceof Error && !(err instanceof CloudAuthError), `${op} ${status}`);
-      assert.match((err).message, new RegExp(`${status}.*nope`));
+      assert.match(err.message, new RegExp(`${status}.*nope`));
     }
   }
   await new DropboxClient(rec(() => new Response('', { status: 409 })).fetchFn, tok).remove('gone');
@@ -867,7 +965,10 @@ test('DropboxClient: 401 is an auth error, 403/429/5xx are plain errors with the
 
 test('DropboxClient: a corrupt list page and network errors reject; long error bodies are truncated', async () => {
   await assert.rejects(new DropboxClient(rec(() => new Response('<html>')).fetchFn, tok).list());
-  await assert.rejects(new DropboxClient(() => Promise.reject(new TypeError('fetch failed')), tok).download('a'), /fetch failed/);
+  await assert.rejects(
+    new DropboxClient(() => Promise.reject(new TypeError('fetch failed')), tok).download('a'),
+    /fetch failed/,
+  );
   const err = await new DropboxClient(rec(() => new Response('x'.repeat(5000), { status: 500 })).fetchFn, tok)
     .download('a')
     .catch((e: unknown) => e as Error);
@@ -881,7 +982,10 @@ test('DropboxClient: the token provider is asked for each call (so refresh happe
   await c.list();
   await c.list();
   assert.equal(n, 2);
-  await assert.rejects(new DropboxClient(r.fetchFn, () => Promise.reject(new CloudAuthError('revoked'))).list(), CloudAuthError);
+  await assert.rejects(
+    new DropboxClient(r.fetchFn, () => Promise.reject(new CloudAuthError('revoked'))).list(),
+    CloudAuthError,
+  );
 });
 
 test('OneDriveClient: nested folders, paging, 404 on a missing root, unicode and special characters in paths', async () => {
@@ -916,13 +1020,21 @@ test('OneDriveClient: errors by status; remove ignores 404', async () => {
 });
 
 test('OneDriveClient: a big upload goes in chunks without the bearer token; an exact 4 MB file is one PUT', async () => {
-  const r = rec((url) => (url.includes('createUploadSession') ? json({ uploadUrl: 'https://up.example/s' }) : new Response('{}')));
+  const r = rec((url) =>
+    url.includes('createUploadSession') ? json({ uploadUrl: 'https://up.example/s' }) : new Response('{}'),
+  );
   const data = Buffer.alloc(CHUNK * 2 + 5, 'x');
   await new OneDriveClient(r.fetchFn, tok).upload('d/big.jsonl', data);
   const puts = r.calls.filter((c) => c.url === 'https://up.example/s');
   assert.equal(puts.length, 3);
-  assert.equal((puts[0]?.init.headers as Record<string, string>)['content-range'], `bytes 0-${CHUNK - 1}/${data.length}`);
-  assert.equal((puts[2]?.init.headers as Record<string, string>)['content-range'], `bytes ${CHUNK * 2}-${data.length - 1}/${data.length}`);
+  assert.equal(
+    (puts[0]?.init.headers as Record<string, string>)['content-range'],
+    `bytes 0-${CHUNK - 1}/${data.length}`,
+  );
+  assert.equal(
+    (puts[2]?.init.headers as Record<string, string>)['content-range'],
+    `bytes ${CHUNK * 2}-${data.length - 1}/${data.length}`,
+  );
   for (const p of puts) assert.equal((p.init.headers as Record<string, string>).authorization, undefined);
   const one = rec(() => new Response('{}'));
   await new OneDriveClient(one.fetchFn, tok).upload('x', Buffer.alloc(SIMPLE_UPLOAD_MAX));
@@ -933,10 +1045,18 @@ test('OneDriveClient: a big upload goes in chunks without the bearer token; an e
 test('OneDriveClient: a failing chunk or session creation aborts the upload', async () => {
   const big = Buffer.alloc(SIMPLE_UPLOAD_MAX + 1);
   await assert.rejects(
-    new OneDriveClient(rec((u) => (u.includes('createUploadSession') ? json({ uploadUrl: 'https://up/s' }) : new Response('', { status: 500 }))).fetchFn, tok).upload('a', big),
+    new OneDriveClient(
+      rec((u) =>
+        u.includes('createUploadSession') ? json({ uploadUrl: 'https://up/s' }) : new Response('', { status: 500 }),
+      ).fetchFn,
+      tok,
+    ).upload('a', big),
     /500/,
   );
-  await assert.rejects(new OneDriveClient(rec(() => new Response('', { status: 507 })).fetchFn, tok).upload('a', big), /507/);
+  await assert.rejects(
+    new OneDriveClient(rec(() => new Response('', { status: 507 })).fetchFn, tok).upload('a', big),
+    /507/,
+  );
 });
 
 test('OAuth configs: authorize URLs carry PKCE and state; OneDrive asks for offline_access', () => {
@@ -1052,22 +1172,37 @@ test('readTitle: unicode, whitespace collapse, 80-char cut, block content, non-u
   assert.equal(readTitle(path.join(d, 'a.jsonl')), ' Привіт, світе 🌍 ');
   write(d, 'b.jsonl', userLine('x'.repeat(200)));
   assert.equal(readTitle(path.join(d, 'b.jsonl')).length, 80);
-  write(d, 'c.jsonl', `${JSON.stringify({ type: 'assistant', message: { content: 'no' } })}\n${JSON.stringify({ type: 'user', message: { content: [{ type: 'image' }, { type: 'text', text: 'real' }] } })}\n`);
+  write(
+    d,
+    'c.jsonl',
+    `${JSON.stringify({ type: 'assistant', message: { content: 'no' } })}\n${JSON.stringify({ type: 'user', message: { content: [{ type: 'image' }, { type: 'text', text: 'real' }] } })}\n`,
+  );
   assert.equal(readTitle(path.join(d, 'c.jsonl')), 'real');
   write(d, 'd.jsonl', '');
   assert.equal(readTitle(path.join(d, 'd.jsonl')), '(no prompt)');
-  write(d, 'e.jsonl', `garbage\n{"type":"user"}\n${JSON.stringify({ type: 'user', message: { content: '<ide>x' } })}\n${userLine('final')}`);
+  write(
+    d,
+    'e.jsonl',
+    `garbage\n{"type":"user"}\n${JSON.stringify({ type: 'user', message: { content: '<ide>x' } })}\n${userLine('final')}`,
+  );
   assert.equal(readTitle(path.join(d, 'e.jsonl')), 'final');
   write(d, 'f.jsonl', JSON.stringify({ type: 'user', message: { content: 'no newline at end' } }));
   assert.equal(readTitle(path.join(d, 'f.jsonl')), 'no newline at end');
-  write(d, 'g.jsonl', `${JSON.stringify({ type: 'user', message: { content: null } })}\n{"type":"user","message":null}\n`);
+  write(
+    d,
+    'g.jsonl',
+    `${JSON.stringify({ type: 'user', message: { content: null } })}\n{"type":"user","message":null}\n`,
+  );
   assert.equal(readTitle(path.join(d, 'g.jsonl')), '(no prompt)');
 });
 
 test('lastActivity: invalid timestamps fall back to mtime; skips torn lines; picks the newest from the tail', () => {
   const d = tmp();
   const f = path.join(d, 'a.jsonl');
-  fs.writeFileSync(f, `${userLineAt('a', '2024-01-01T00:00:00Z')}${userLineAt('b', '2024-06-01T00:00:00Z')}{"type":"summary"}\n{torn`);
+  fs.writeFileSync(
+    f,
+    `${userLineAt('a', '2024-01-01T00:00:00Z')}${userLineAt('b', '2024-06-01T00:00:00Z')}{"type":"summary"}\n{torn`,
+  );
   assert.equal(lastActivity(f, fs.statSync(f)), Date.parse('2024-06-01T00:00:00Z'));
   fs.writeFileSync(f, `${JSON.stringify({ timestamp: 'garbage' })}\n${JSON.stringify({ timestamp: 5 })}\n`);
   const when = new Date('2020-02-02T00:00:00Z');
@@ -1083,15 +1218,22 @@ test('listSessions: missing dir, ordering, foreign files ignored', () => {
   write(d, 'x.txt', 'ignored');
   write(d, 'empty.jsonl', '');
   const l = listSessions(d);
-  assert.deepEqual(l.map((s) => s.id), ['new', 'old']);
+  assert.deepEqual(
+    l.map((s) => s.id),
+    ['new', 'old'],
+  );
   assert.equal(l[0]?.title, 'n');
   assert.equal(l[0].bytes, userLineAt('n', '2024-01-01T00:00:00Z').length);
 });
 
 // ---------------------------------------------------------------- syncService
 
-const svc = (transport: Transport, localDir: string, deviceName: string, extra: Partial<ConstructorParameters<typeof SyncService>[0]> = {}) =>
-  new SyncService({ transport, localDir, projectKey: 'proj', deviceName, ...extra });
+const svc = (
+  transport: Transport,
+  localDir: string,
+  deviceName: string,
+  extra: Partial<ConstructorParameters<typeof SyncService>[0]> = {},
+) => new SyncService({ transport, localDir, projectKey: 'proj', deviceName, ...extra });
 
 test('SyncService: push of an empty local dir or a missing one is a no-op; the device name is sanitised', async () => {
   const store = tmp();
@@ -1145,7 +1287,9 @@ test('SyncService: pull creates the local project dir; pull never applies push l
   write(a, 'big.jsonl', 'x'.repeat(100));
   await svc(new FolderTransport(store), a, 'A').push();
   const target = path.join(tmp(), 'new', 'project');
-  const r = await svc(new FolderTransport(store), target, 'B', { limits: { maxFileBytes: 1, maxAgeDays: 1 } }).pull('A');
+  const r = await svc(new FolderTransport(store), target, 'B', { limits: { maxFileBytes: 1, maxAgeDays: 1 } }).pull(
+    'A',
+  );
   assert.deepEqual([r.copied, r.tooLarge, r.tooOld], [['big.jsonl'], [], 0]);
 });
 
@@ -1159,10 +1303,16 @@ test('SyncService: push limits: size and age are applied together; maxAgeDays 0 
   touch(a, 'fresh.jsonl', new Date(now - 1 * 86_400_000));
   touch(a, 'old.jsonl', new Date(now - 40 * 86_400_000));
   touch(a, 'huge.jsonl', new Date(now - 1 * 86_400_000));
-  const limited = await svc(new FolderTransport(store), a, 'A', { limits: { maxFileBytes: 10, maxAgeDays: 30 }, now: () => now }).push();
+  const limited = await svc(new FolderTransport(store), a, 'A', {
+    limits: { maxFileBytes: 10, maxAgeDays: 30 },
+    now: () => now,
+  }).push();
   assert.deepEqual([limited.copied, limited.tooLarge, limited.tooOld], [['fresh.jsonl'], ['huge.jsonl'], 1]);
   const store2 = tmp();
-  const unlimited = await svc(new FolderTransport(store2), a, 'A', { limits: { maxFileBytes: 1000, maxAgeDays: 0 }, now: () => now }).push();
+  const unlimited = await svc(new FolderTransport(store2), a, 'A', {
+    limits: { maxFileBytes: 1000, maxAgeDays: 0 },
+    now: () => now,
+  }).push();
   assert.deepEqual(unlimited.copied.sort(), ['fresh.jsonl', 'huge.jsonl', 'old.jsonl']);
 });
 
@@ -1188,7 +1338,11 @@ test('SyncService: push retries once after a failed publish and succeeds; a seco
   const twice = mk(5);
   await assert.rejects(svc(twice.transport, local, 'A').push(), /push rejected/);
   assert.equal(twice.counts().publishes, 2);
-  const broken = { root: tmp(), refresh: () => Promise.reject(new Error('offline')), publish: () => Promise.resolve(true) };
+  const broken = {
+    root: tmp(),
+    refresh: () => Promise.reject(new Error('offline')),
+    publish: () => Promise.resolve(true),
+  };
   await assert.rejects(svc(broken, local, 'A').push(), /offline/);
 });
 
@@ -1206,12 +1360,22 @@ test('SyncService: a failing operation does not block the queue; operations run 
     publish: () => Promise.resolve(false),
   };
   const s = svc(transport, tmp(), 'A');
-  const all = await Promise.allSettled([s.push(), s.devices(), s.available('A'), s.pull('A'), s.removeDevice('A'), s.push()]);
+  const all = await Promise.allSettled([
+    s.push(),
+    s.devices(),
+    s.available('A'),
+    s.pull('A'),
+    s.removeDevice('A'),
+    s.push(),
+  ]);
   assert.equal(maxRunning, 1);
   assert.ok(all.every((r) => r.status === 'fulfilled'));
   const failing = svc({ ...transport, refresh: () => Promise.reject(new Error('x')) }, tmp(), 'A');
   const res = await Promise.allSettled([failing.devices(), failing.pull('A')]);
-  assert.deepEqual(res.map((r) => r.status), ['rejected', 'rejected']);
+  assert.deepEqual(
+    res.map((r) => r.status),
+    ['rejected', 'rejected'],
+  );
 });
 
 test('SyncService: several devices push the same project and each can pull from each other; conflicts are per-session', async () => {
@@ -1235,9 +1399,24 @@ test('SyncService: projects are isolated by key; removing a device of one projec
   const store = tmp();
   const a = tmp();
   write(a, 's.jsonl', userLine('x'));
-  await new SyncService({ transport: new FolderTransport(store), localDir: a, projectKey: 'p1', deviceName: 'A' }).push();
-  await new SyncService({ transport: new FolderTransport(store), localDir: a, projectKey: 'p2', deviceName: 'A' }).push();
-  const p1 = new SyncService({ transport: new FolderTransport(store), localDir: tmp(), projectKey: 'p1', deviceName: 'A' });
+  await new SyncService({
+    transport: new FolderTransport(store),
+    localDir: a,
+    projectKey: 'p1',
+    deviceName: 'A',
+  }).push();
+  await new SyncService({
+    transport: new FolderTransport(store),
+    localDir: a,
+    projectKey: 'p2',
+    deviceName: 'A',
+  }).push();
+  const p1 = new SyncService({
+    transport: new FolderTransport(store),
+    localDir: tmp(),
+    projectKey: 'p1',
+    deviceName: 'A',
+  });
   assert.deepEqual(await p1.removeDevice('A'), { removed: 1, published: true });
   assert.equal(fs.existsSync(path.join(store, 'devices', 'A', 'projects', 'p2', 's.jsonl')), true);
   assert.equal(fs.existsSync(path.join(store, 'devices', 'A', 'projects', 'p1')), false);
@@ -1265,7 +1444,10 @@ test('SyncService: a corrupt device marker is treated as unclaimed; a marker wit
   write(dir, 'device.json', JSON.stringify({ name: 'A' }));
   await svc(new FolderTransport(store), local, 'A', { installId: 'two' }).push();
   assert.equal((JSON.parse(read(dir, 'device.json')) as { id: string }).id, 'two');
-  await assert.rejects(svc(new FolderTransport(store), local, 'A', { installId: 'three' }).push(), DeviceNameTakenError);
+  await assert.rejects(
+    svc(new FolderTransport(store), local, 'A', { installId: 'three' }).push(),
+    DeviceNameTakenError,
+  );
   await svc(new FolderTransport(store), local, 'A', { installId: 'three' }).push({ takeOver: true });
   assert.equal((JSON.parse(read(dir, 'device.json')) as { id: string }).id, 'three');
 });
@@ -1277,10 +1459,16 @@ test('SyncService: a refused push (name taken) copies nothing and does not publi
   write(path.join(store, 'devices', 'A'), 'device.json', JSON.stringify({ id: 'other' }));
   let published = 0;
   const t = new FolderTransport(store);
-  const spy = { root: t.root, refresh: () => t.refresh(), publish: (m: string, n: number) => (published++, t.publish(m, n)) };
-  const err = await svc(spy, local, 'A', { installId: 'me' }).push().catch((e: unknown) => e);
+  const spy = {
+    root: t.root,
+    refresh: () => t.refresh(),
+    publish: (m: string, n: number) => (published++, t.publish(m, n)),
+  };
+  const err = await svc(spy, local, 'A', { installId: 'me' })
+    .push()
+    .catch((e: unknown) => e);
   assert.ok(err instanceof DeviceNameTakenError);
-  assert.equal((err).device, 'A');
+  assert.equal(err.device, 'A');
   assert.equal(published, 0);
   assert.equal(fs.existsSync(path.join(store, 'devices', 'A', 'projects')), false);
 });
@@ -1291,10 +1479,17 @@ test('SyncService: the marker file is not counted as a session and the push mess
   write(local, 's.jsonl', userLine('x'));
   const messages: string[] = [];
   const t = new FolderTransport(store);
-  const spy = { root: t.root, refresh: () => t.refresh(), publish: (m: string, n: number) => (messages.push(m), t.publish(m, n)) };
+  const spy = {
+    root: t.root,
+    refresh: () => t.refresh(),
+    publish: (m: string, n: number) => (messages.push(m), t.publish(m, n)),
+  };
   await svc(spy, local, 'A', { installId: 'me' }).push();
   assert.deepEqual(messages, ['sync A: 1 session(s)']);
-  assert.deepEqual((await svc(new FolderTransport(store), tmp(), 'B').devices()).map((d) => [d.name, d.sessions]), [['A', 1]]);
+  assert.deepEqual(
+    (await svc(new FolderTransport(store), tmp(), 'B').devices()).map((d) => [d.name, d.sessions]),
+    [['A', 1]],
+  );
 });
 
 test('SyncService: available() reports the status of every session with a corrupt/empty file mix', async () => {
@@ -1320,7 +1515,8 @@ test('SyncService over a MirrorTransport: two devices through a cloud store, del
   const mkMirror = () => new MirrorTransport(path.join(tmp(), 'cache'), store);
   let flaky = true;
   const orig = store.upload.bind(store);
-  store.upload = (rel, data) => (flaky ? ((flaky = false), Promise.reject(new Error('fetch failed'))) : orig(rel, data));
+  store.upload = (rel, data) =>
+    flaky ? ((flaky = false), Promise.reject(new Error('fetch failed'))) : orig(rel, data);
   const sa = svc(mkMirror(), a, 'A');
   assert.equal((await sa.push()).pushed, true);
   assert.ok(store.files.has('devices/A/projects/proj/s.jsonl'));

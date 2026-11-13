@@ -20,6 +20,15 @@ export function safeDeviceName(raw: string): string {
   return isSafeDeviceDir(name) ? name : 'device';
 }
 
+/**
+ * The name this computer pushes as when the user did not set one: the host name without macOS's «.local», or
+ * `device-<id>` when nothing of it is usable (a name in Cyrillic, say), so two such computers never share «device».
+ */
+export function defaultDeviceName(hostname: string, installId: string): string {
+  const name = safeDeviceName(hostname.replace(/\.local$/i, ''));
+  return name === 'device' ? `device-${installId.slice(0, 8)}` : name;
+}
+
 export interface DeviceInfo {
   /** Folder name, or `LEGACY_SOURCE`. */
   name: string;

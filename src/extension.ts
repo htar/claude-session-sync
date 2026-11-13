@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { isValidRepoUrl, remoteOf } from './core/git';
-import { DeviceInfo } from './core/devices';
+import { defaultDeviceName, DeviceInfo } from './core/devices';
 import { ensureSyncFolder, STORAGES, storageRoots } from './core/storages';
 import { CLOUDS, CloudId, CloudProvider, isCloudId } from './core/cloud';
 import { classifyError, redactSecrets } from './core/errors';
@@ -23,6 +23,24 @@ const WARNED_KEY = 'pushWarningAccepted';
 const INSTALL_KEY = 'installId';
 
 /** Tells this installation from another computer that happens to have the same device name. */
+const DEVICE_NAME_KEY = 'defaultDeviceName';
+
+/**
+ * The host name is remembered on first use: on a Mac it changes with the network («MacBook-Pro-2»), and a new name
+ * would look like a new device with none of the sessions pushed before.
+ */
+function deviceNameOf(context: vscode.ExtensionContext, configured: string): string {
+  if (configured) return configured;
+  let name = context.globalState.get<string>(DEVICE_NAME_KEY);
+  if (!name) {
+    // An installation that already pushed keeps the name it pushed under, or its exports would look foreign.
+    const pushedBefore = context.globalState.get<string>(INSTALL_KEY) !== undefined;
+    name = pushedBefore ? os.hostname() : defaultDeviceName(os.hostname(), installIdOf(context));
+    void context.globalState.update(DEVICE_NAME_KEY, name);
+  }
+  return name;
+}
+
 function installIdOf(context: vscode.ExtensionContext): string {
   let id = context.globalState.get<string>(INSTALL_KEY);
   if (!id) {
@@ -338,7 +356,7 @@ async function openSession(
     maxFileSizeMB: cfg.get('maxFileSizeMB'),
     maxSessionAgeDays: cfg.get('maxSessionAgeDays'),
   });
-  const deviceName = cfg.get<string>('deviceName', '').trim() || os.hostname();
+  const deviceName = deviceNameOf(context, cfg.get<string>('deviceName', '').trim());
   const service = new SyncService(
     { transport, localDir, projectKey: key, deviceName, limits, installId: installIdOf(context) },
     log,

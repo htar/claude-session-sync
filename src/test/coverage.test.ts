@@ -6,7 +6,14 @@ import * as net from 'node:net';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { CLOUDS, isCloudId } from '../core/cloud';
-import { deviceDir, isSafeDeviceDir, LEGACY_SOURCE, listDevices, safeDeviceName } from '../core/devices';
+import {
+  defaultDeviceName,
+  deviceDir,
+  isSafeDeviceDir,
+  LEGACY_SOURCE,
+  listDevices,
+  safeDeviceName,
+} from '../core/devices';
 import { DropboxClient, dropboxOAuth } from '../core/dropbox';
 import { classifyError } from '../core/errors';
 import { commitAndPush, ensureClone, git, pullRepo, remoteOf } from '../core/git';
@@ -1528,4 +1535,10 @@ test('SyncService over a MirrorTransport: two devices through a cloud store, del
 
 test('projectKey does not take the host as the owner (`https://h/justone` falls back to the folder name)', () => {
   assert.equal(projectKey('https://h/justone', '/w/x'), 'x');
+});
+
+test('defaultDeviceName drops «.local» and never falls back to a shared «device»', () => {
+  assert.equal(defaultDeviceName('MacBook-Pro.local', 'abcdef123456'), 'MacBook-Pro');
+  assert.equal(defaultDeviceName('DESKTOP-42', 'abcdef123456'), 'DESKTOP-42');
+  assert.equal(defaultDeviceName('Ноутбук', 'abcdef123456'), 'device-abcdef12');
 });

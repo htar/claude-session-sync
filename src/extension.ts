@@ -7,6 +7,7 @@ import { isValidRepoUrl, remoteOf } from './core/git';
 import { defaultDeviceName, DeviceInfo } from './core/devices';
 import { ensureSyncFolder, STORAGES, storageRoots } from './core/storages';
 import { CLOUDS, CloudId, CloudProvider, isCloudId } from './core/cloud';
+import { scanSessions } from './core/secrets';
 import { classifyError, redactSecrets } from './core/errors';
 import { retryingFetch } from './core/http';
 import { signIn, tokenProvider } from './core/oauth';
@@ -364,6 +365,28 @@ async function openSession(
   return { service, localDir, folder, limits, where: describeMethod(vscode.workspace.getConfiguration(SECTION)) };
 }
 
+/** Before a push: sessions that look like they hold API keys or tokens are shown, and the user decides. */
+async function reviewSecrets(localDir: string, pending: readonly string[]): Promise<ReadonlySet<string> | 'cancel'> {
+  const hits = scanSessions(localDir, pending);
+  if (!hits.size) return new Set();
+  const titles = new Map(listSessions(localDir).map((x) => [`${x.id}.jsonl`, x.title]));
+  const lines = [...hits].map(([name, kinds]) => `• ${titles.get(name) ?? name}: ${kinds.join(', ')}`);
+  const LEAVE_OUT = `Push without ${hits.size === 1 ? 'it' : 'them'}`;
+  const ANYWAY = 'Push anyway';
+  const pick = await vscode.window.showWarningMessage(
+    `${hits.size} session(s) look like they contain credentials.`,
+    {
+      modal: true,
+      detail: `${lines.slice(0, 10).join('\n')}${lines.length > 10 ? `\n…and ${lines.length - 10} more` : ''}\n\nRevoke any key that has already left this computer. Checking can be turned off with claudeSessionSync.scanSecrets.`,
+    },
+    LEAVE_OUT,
+    ANYWAY,
+  );
+  if (pick === ANYWAY) return new Set();
+  if (pick === LEAVE_OUT) return new Set(hits.keys());
+  return 'cancel';
+}
+
 async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boolean> {
   if (context.globalState.get<boolean>(WARNED_KEY)) return true;
   const ok = await vscode.window.showWarningMessage(
@@ -692,7 +715,11 @@ export function activate(context: vscode.ExtensionContext): void {
           );
           return;
         }
-        const run = (takeOver: boolean) => progress('Claude Sync: pushing…', () => s.service.push({ takeOver }));
+        const review = vscode.workspace.getConfiguration(SECTION).get<boolean>('scanSecrets', true)
+          ? (pending: readonly string[]) => reviewSecrets(s.localDir, pending)
+          : undefined;
+        const run = (takeOver: boolean) =>
+          progress('Claude Sync: pushing…', () => s.service.push({ takeOver, review }));
         let result: SyncResult;
         try {
           result = await run(false);
@@ -701,6 +728,7 @@ export function activate(context: vscode.ExtensionContext): void {
           if ((await resolveNameClash(e.device)) !== 'takeOver') return;
           result = await run(true);
         }
+        if (result.cancelled) return;
         report('push', result, s.limits, s.where, s.service.device);
       },
       () => confirmFirstPush(context),

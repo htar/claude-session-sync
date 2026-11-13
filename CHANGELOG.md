@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Before a push, the sessions about to be sent are checked for API keys, tokens and private keys; you see which ones and
+  can leave them out (`claudeSessionSync.scanSecrets`, on by default).
+
 ## 0.8.0
 
 - Dropbox and OneDrive: requests are retried when the service says «slow down» (429) or fails for a moment (5xx) and when

@@ -60,6 +60,7 @@ All settings apply per machine: set them in User settings.
 | `claudeSessionSync.repoUrl`           | empty                              | Address of the private repository for the "own git" method.                                                                                   |
 | `claudeSessionSync.maxFileSizeMB`     | `90`                               | Sessions larger than this are not pushed (and you are warned).                                                                                |
 | `claudeSessionSync.maxSessionAgeDays` | `30`                               | Only sessions modified within the last N days are pushed. `0` = no limit.                                                                     |
+| `claudeSessionSync.scanSecrets`       | `true`                             | Check the sessions about to be pushed for API keys, tokens and private keys, and offer to leave them out.                                     |
 
 ## If something goes wrong
 
@@ -76,6 +77,9 @@ All settings apply per machine: set them in User settings.
 
 ## Security
 
+- Before every Push the sessions about to be sent are checked for API keys, tokens and private keys (AWS, GitHub,
+  Anthropic, OpenAI, Slack, Stripe, Google, npm). If something is found you see which sessions and can leave them out.
+  Turn it off with `claudeSessionSync.scanSecrets`.
 - Sessions contain your code, command output and **possibly secrets**. Send them only to private storage: a private
   repository or your own cloud. The extension warns you before the first Push.
 - The GitHub method asks for the `repo` permission (GitHub has nothing narrower for private repositories). The token

@@ -59,6 +59,7 @@
 | `claudeSessionSync.repoUrl`           | 空                       | “自己的 git”方式所用私有仓库的地址。                                                                                |
 | `claudeSessionSync.maxFileSizeMB`     | `90`                     | 大于此值的会话不会被推送（并会给出提示）。                                                                          |
 | `claudeSessionSync.maxSessionAgeDays` | `30`                     | 仅推送最近 N 天内修改过的会话。`0` = 不限制。                                                                       |
+| `claudeSessionSync.scanSecrets`       | `true`                   | Push 前检查即将发送的会话中的 API 密钥、令牌和私钥，并提供不发送的选项。                                            |
 
 ## 出现问题时
 
@@ -75,6 +76,8 @@
 
 ## 安全
 
+- 每次 Push 前，会检查即将发送的会话中是否含有 API 密钥、令牌和私钥（AWS、GitHub、Anthropic、OpenAI、Slack、Stripe、
+  Google、npm）。如有发现，会列出相关会话，你可以选择不发送它们。可通过 `claudeSessionSync.scanSecrets` 关闭。
 - 会话包含你的代码、命令输出，**可能还有机密信息**。请只发送到私有存储：私有仓库或你自己的云盘。首次 Push 前扩展会提醒你。
 - GitHub 方式会请求 `repo` 权限（GitHub 没有更窄的私有仓库权限）。令牌保留在 VS Code 内，扩展代码是开源的。
 - 如果在 iCloud 中开启了“优化 Mac 储存空间”，部分会话可能尚未下载到本机。扩展会告诉你数量以及该怎么做。

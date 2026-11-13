@@ -149,6 +149,12 @@
           "scope": "machine",
           "markdownDescription": "Push only sessions modified within this many days. `0` = no limit. A pull always takes everything the repository holds."
         },
+        "claudeSessionSync.scanSecrets": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Before a push, look for API keys, tokens and private keys in the sessions about to be sent, and ask whether to leave those sessions out."
+        },
         "claudeSessionSync.projectKey": {
           "type": "string",
           "default": "",

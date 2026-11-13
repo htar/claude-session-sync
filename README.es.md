@@ -60,6 +60,7 @@ Todos los ajustes se aplican por equipo: defínelos en los ajustes de usuario (U
 | `claudeSessionSync.repoUrl`           | vacío                                         | Dirección del repositorio privado para el método «git propio».                                                                                            |
 | `claudeSessionSync.maxFileSizeMB`     | `90`                                          | Las sesiones más grandes que esto no se envían (y se te avisa).                                                                                           |
 | `claudeSessionSync.maxSessionAgeDays` | `30`                                          | Solo se envían las sesiones modificadas en los últimos N días. `0` = sin límite.                                                                          |
+| `claudeSessionSync.scanSecrets`       | `true`                                        | Revisar las sesiones antes del Push en busca de claves de API, tokens y claves privadas, y ofrecer dejarlas fuera.                                        |
 
 ## Si algo sale mal
 
@@ -76,6 +77,9 @@ Todos los ajustes se aplican por equipo: defínelos en los ajustes de usuario (U
 
 ## Seguridad
 
+- Antes de cada Push se revisan las sesiones que se van a enviar en busca de claves de API, tokens y claves privadas
+  (AWS, GitHub, Anthropic, OpenAI, Slack, Stripe, Google, npm). Si se encuentra algo, verás qué sesiones son y podrás
+  dejarlas fuera. Se desactiva con `claudeSessionSync.scanSecrets`.
 - Las sesiones contienen tu código, la salida de comandos y **posiblemente secretos**. Envíalas solo a un
   almacenamiento privado: un repositorio privado o tu propia nube. La extensión te avisa antes del primer Push.
 - El método GitHub pide el permiso `repo` (GitHub no tiene uno más limitado para repositorios privados). El token

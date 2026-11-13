@@ -43,7 +43,15 @@ export interface SyncResult {
   notDownloaded?: number;
   /** push only: false when nothing changed. */
   pushed?: boolean;
+  /** push only: the user stopped the push when shown what it would send. */
+  cancelled?: boolean;
 }
+
+/**
+ * Shown the sessions a push is about to send, returns the ones to leave out, or `'cancel'` to send nothing.
+ * Used to warn about sessions that look like they hold credentials.
+ */
+export type PushReview = (pending: readonly string[]) => Promise<ReadonlySet<string> | 'cancel'>;
 
 /** A session held by the shared store, with what a pull would do to this device's copy. */
 export interface AvailableSession extends SessionInfo {
@@ -77,14 +85,23 @@ export class SyncService {
   }
 
   /** `takeOver`: the user confirmed that a folder with this name is this very computer's (a reinstalled editor). */
-  push(opts: { takeOver?: boolean } = {}): Promise<SyncResult> {
+  push(opts: { takeOver?: boolean; review?: PushReview } = {}): Promise<SyncResult> {
     return this.exclusive(async () => {
       const filter = this.pushFilter();
       let last: CopyResult | undefined;
+      let reviewed = false;
       // A push can lose a race against another device: pull again and retry once.
       for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
         await this.cfg.transport.refresh();
         this.claimDevice(opts.takeOver === true);
+        if (opts.review && !reviewed) {
+          reviewed = true; // a retry after a lost race must not ask again
+          const pending = copyTranscripts(this.cfg.localDir, this.dirOf(this.device), { ...filter, dryRun: true });
+          const verdict = await opts.review(pending.copied);
+          if (verdict === 'cancel')
+            return { copied: [], conflicts: [], tooLarge: [], tooOld: 0, pushed: false, cancelled: true };
+          filter.exclude = verdict;
+        }
         last = copyTranscripts(this.cfg.localDir, this.dirOf(this.device), filter);
         try {
           const pushed = await this.cfg.transport.publish(

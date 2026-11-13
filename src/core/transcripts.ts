@@ -18,6 +18,10 @@ export interface CopyOptions {
   modifiedAfterMs?: number;
   /** Copy only these file names (`<id>.jsonl`); everything else is left alone and not counted. */
   only?: ReadonlySet<string>;
+  /** Leave these file names out entirely (the user chose not to send them). */
+  exclude?: ReadonlySet<string>;
+  /** Decide only: report what would be copied without writing anything. */
+  dryRun?: boolean;
 }
 
 export interface CopyResult {
@@ -71,10 +75,14 @@ function atomicCopy(from: string, to: string): void {
 export function copyTranscripts(src: string, dst: string, options: CopyOptions = {}): CopyResult {
   const result: CopyResult = { copied: [], skipped: [], conflicts: [], tooLarge: [], tooOld: 0, notDownloaded: 0 };
   if (!fs.existsSync(src)) return result;
-  fs.mkdirSync(dst, { recursive: true });
+  const copy = (from: string, to: string): void => {
+    if (options.dryRun) return;
+    fs.mkdirSync(dst, { recursive: true });
+    atomicCopy(from, to);
+  };
   for (const name of fs.readdirSync(src)) {
     if (ICLOUD_PLACEHOLDER.test(name)) result.notDownloaded++;
-    if (!SESSION_FILE.test(name) || (options.only && !options.only.has(name))) continue;
+    if (!SESSION_FILE.test(name) || (options.only && !options.only.has(name)) || options.exclude?.has(name)) continue;
     const from = path.join(src, name);
     const to = path.join(dst, name);
     const stat = fs.statSync(from);
@@ -85,10 +93,10 @@ export function copyTranscripts(src: string, dst: string, options: CopyOptions =
     } else if (options.maxBytes !== undefined && stat.size > options.maxBytes) {
       result.tooLarge.push(name);
     } else if (!fs.existsSync(to)) {
-      atomicCopy(from, to);
+      copy(from, to);
       result.copied.push(name);
     } else if (stat.size > fs.statSync(to).size && isPrefix(to, from)) {
-      atomicCopy(from, to);
+      copy(from, to);
       result.copied.push(name);
     } else if (isPrefix(from, to)) {
       result.skipped.push(name);

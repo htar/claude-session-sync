@@ -269,7 +269,9 @@ async function pickFolderByHand(title: string): Promise<string | undefined> {
  * The user names the storage; «Claude Sessions» is created at its root. Only when the storage's app folder is
  * not where it is expected does the user have to point at it.
  */
-async function folderTransport(cfg: vscode.WorkspaceConfiguration): Promise<Transport | undefined> {
+async function folderTransport(): Promise<Transport | undefined> {
+  // Read the setting afresh: a WorkspaceConfiguration is a snapshot, and callers may have just cleared the folder.
+  const cfg = vscode.workspace.getConfiguration(SECTION);
   let folder = cfg.get<string>('syncFolder', '').trim();
   if (!folder || !path.isAbsolute(folder)) {
     const OTHER = 'Another folder…';
@@ -329,7 +331,7 @@ async function openSession(
     github: () => githubTransport(context),
     dropbox: () => cloudTransport(context, CLOUDS.dropbox),
     onedrive: () => cloudTransport(context, CLOUDS.onedrive),
-    folder: () => folderTransport(cfg),
+    folder: () => folderTransport(),
     git: () => gitTransport(context, cfg),
   }[mode]();
   if (!transport) return;
@@ -523,7 +525,7 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (pick === 'Choose the storage again') {
         await cfg.update('syncFolder', '', vscode.ConfigurationTarget.Global);
-        return Boolean(await folderTransport(cfg));
+        return Boolean(await folderTransport());
       }
       if (pick) await vscode.commands.executeCommand(`${SECTION}.chooseMode`);
       return false;
@@ -694,7 +696,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (isCloudId(mode)) {
         if (!(await cloudTransport(context, CLOUDS[mode]))) return;
       } else if (mode === 'folder') {
-        const transport = await folderTransport(cfg);
+        const transport = await folderTransport();
         if (!transport) return;
         where = transport.root;
       }

@@ -76,6 +76,8 @@
 
 ## 安全
 
+- **加密**（可选）：**Claude Sync: Turn on encryption** 使用口令加密存储中的会话（AES-256-GCM，密钥由 scrypt 生成）。
+  存储只能看到加密文件；其他每台设备只需输入一次口令。口令丢失后无法恢复。旧版本扩展的设备看不到加密会话。
 - 每次 Push 前，会检查即将发送的会话中是否含有 API 密钥、令牌和私钥（AWS、GitHub、Anthropic、OpenAI、Slack、Stripe、
   Google、npm）。如有发现，会列出相关会话，你可以选择不发送它们。可通过 `claudeSessionSync.scanSecrets` 关闭。
 - 会话包含你的代码、命令输出，**可能还有机密信息**。请只发送到私有存储：私有仓库或你自己的云盘。首次 Push 前扩展会提醒你。

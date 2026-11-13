@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Optional end-to-end encryption: «Turn on encryption» encrypts the stored sessions with a passphrase (AES-256-GCM,
+  scrypt). Works with every sync method; other devices ask for the passphrase once and keep it in the secret store.
 - Before a push, the sessions about to be sent are checked for API keys, tokens and private keys; you see which ones and
   can leave them out (`claudeSessionSync.scanSecrets`, on by default).
 

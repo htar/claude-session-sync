@@ -77,6 +77,9 @@ All settings apply per machine: set them in User settings.
 
 ## Security
 
+- **Encryption** (optional): **Claude Sync: Turn on encryption** encrypts the stored sessions with a passphrase
+  (AES-256-GCM, key from scrypt). The storage only sees encrypted files; each other device asks for the passphrase
+  once. A lost passphrase cannot be recovered. Devices with a version before encryption do not see encrypted sessions.
 - Before every Push the sessions about to be sent are checked for API keys, tokens and private keys (AWS, GitHub,
   Anthropic, OpenAI, Slack, Stripe, Google, npm). If something is found you see which sessions and can leave them out.
   Turn it off with `claudeSessionSync.scanSecrets`.

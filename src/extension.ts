@@ -7,6 +7,7 @@ import { isValidRepoUrl, remoteOf } from './core/git';
 import { defaultDeviceName, DeviceInfo } from './core/devices';
 import { ensureSyncFolder, STORAGES, storageRoots } from './core/storages';
 import { CLOUDS, CloudId, CloudProvider, isCloudId } from './core/cloud';
+import { EncryptingTransport, EncryptionMeta, openMeta, WrongPassphraseError } from './core/encryption';
 import { scanSessions } from './core/secrets';
 import { classifyError, redactSecrets } from './core/errors';
 import { retryingFetch } from './core/http';
@@ -80,6 +81,8 @@ interface Session {
   limits: Limits;
   /** Where the sessions go, for messages: «GitHub», the cloud folder or the repository address. */
   where: string;
+  /** The storage, wrapped so it can be encrypted. */
+  transport: EncryptingTransport;
 }
 
 type Mode = 'github' | CloudId | 'folder' | 'git';
@@ -343,14 +346,19 @@ async function openSession(
   const cfg = vscode.workspace.getConfiguration(SECTION);
   const mode = await chooseMode(cfg, false, intent);
   if (!mode) return;
-  const transport = await {
+  const inner = await {
     github: () => githubTransport(context),
     dropbox: () => cloudTransport(context, CLOUDS.dropbox),
     onedrive: () => cloudTransport(context, CLOUDS.onedrive),
     folder: () => folderTransport(),
     git: () => gitTransport(context, cfg),
   }[mode]();
-  if (!transport) return;
+  if (!inner) return;
+  const transport = new EncryptingTransport(
+    inner,
+    path.join(context.globalStorageUri.fsPath, `${mode}-plain`),
+    (meta) => askPassphrase(context, meta),
+  );
   const localDir = path.join(claudeProjectsDir(cfg.get<string>('claudeDir', '')), encodeProjectDir(folder));
   const key = sanitizeProjectKey(cfg.get<string>('projectKey', '')) || projectKey(await remoteOf(folder), folder);
   const limits = parseLimits({
@@ -362,7 +370,14 @@ async function openSession(
     { transport, localDir, projectKey: key, deviceName, limits, installId: installIdOf(context) },
     log,
   );
-  return { service, localDir, folder, limits, where: describeMethod(vscode.workspace.getConfiguration(SECTION)) };
+  return {
+    service,
+    localDir,
+    folder,
+    limits,
+    transport,
+    where: describeMethod(vscode.workspace.getConfiguration(SECTION)),
+  };
 }
 
 /** Before a push: sessions that look like they hold API keys or tokens are shown, and the user decides. */
@@ -385,6 +400,42 @@ async function reviewSecrets(localDir: string, pending: readonly string[]): Prom
   if (pick === ANYWAY) return new Set();
   if (pick === LEAVE_OUT) return new Set(hits.keys());
   return 'cancel';
+}
+
+/** The passphrase is kept per storage (by its salt) in VS Code's secret store, so it is asked once per device. */
+const passphraseKey = (meta: EncryptionMeta): string => `encryption.${meta.salt}`;
+
+async function askPassphrase(context: vscode.ExtensionContext, meta: EncryptionMeta): Promise<Buffer | undefined> {
+  const saved = await context.secrets.get(passphraseKey(meta)).then(
+    (p) => p,
+    () => undefined,
+  );
+  if (saved) {
+    try {
+      return openMeta(meta, saved);
+    } catch {
+      await context.secrets.delete(passphraseKey(meta)); // changed on another device: ask again
+    }
+  }
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const entered = await vscode.window.showInputBox({
+      title: 'Claude Sync: the storage is encrypted',
+      prompt: attempt
+        ? 'That passphrase does not open this storage. Try again.'
+        : 'Enter the encryption passphrase you chose on your other device.',
+      password: true,
+      ignoreFocusOut: true,
+    });
+    if (!entered) return undefined;
+    try {
+      const key = openMeta(meta, entered);
+      await context.secrets.store(passphraseKey(meta), entered).then(undefined, () => undefined);
+      return key;
+    } catch (e) {
+      if (!(e instanceof WrongPassphraseError)) throw e;
+    }
+  }
+  throw new WrongPassphraseError();
 }
 
 async function confirmFirstPush(context: vscode.ExtensionContext): Promise<boolean> {
@@ -697,7 +748,14 @@ export function activate(context: vscode.ExtensionContext): void {
       const items = [
         { label: '$(arrow-swap) Change sync method', description: `now: ${describeMethod(cfg)}`, id: 'chooseMode' },
         ...(connected
-          ? [{ label: '$(sign-out) Disconnect', description: 'Sign out of this method', id: 'disconnect' }]
+          ? [
+              {
+                label: '$(lock) Turn on encryption',
+                description: 'Encrypt the stored sessions with a passphrase',
+                id: 'enableEncryption',
+              },
+              { label: '$(sign-out) Disconnect', description: 'Sign out of this method', id: 'disconnect' },
+            ]
           : []),
         { label: '$(output) Show log', description: '', id: 'log' },
       ];
@@ -785,11 +843,69 @@ export function activate(context: vscode.ExtensionContext): void {
       for (const cloud of Object.values(CLOUDS)) await context.secrets.delete(tokenKey(cloud));
       const cache = CACHE_DIR[mode];
       if (cache) fs.rmSync(path.join(context.globalStorageUri.fsPath, cache), { recursive: true, force: true });
+      // The decrypted copy of an encrypted storage.
+      fs.rmSync(path.join(context.globalStorageUri.fsPath, `${mode}-plain`), { recursive: true, force: true });
       void vscode.window.showInformationMessage(
         mode === 'github'
           ? 'Claude Sync: disconnected. To also revoke GitHub access, sign out of GitHub in the Accounts menu.'
           : 'Claude Sync: disconnected. The next Push or Pull will ask for a method again.',
       );
+    }),
+    command('enableEncryption', async (s) => {
+      await progress('Claude Sync: looking at the storage…', () => s.transport.refresh());
+      if (s.transport.encrypted) {
+        void vscode.window.showInformationMessage(`Claude Sync: ${s.where} is already encrypted.`);
+        return;
+      }
+      const REMOVE = 'Turn on and remove unencrypted copies';
+      const KEEP = 'Turn on, keep them';
+      const how = await vscode.window.showWarningMessage(
+        `Encrypt the sessions in ${s.where} with a passphrase?`,
+        {
+          modal: true,
+          detail:
+            'Only devices that know the passphrase can read them; the storage sees nothing but encrypted files. ' +
+            'You will type the same passphrase once on every other device. If it is lost, the stored sessions cannot ' +
+            'be recovered (the ones on your devices are not affected).\n\n' +
+            'Sessions already in the storage are not encrypted. Remove them now and each device pushes its sessions ' +
+            'again, encrypted. Devices with an older version of the extension will not see encrypted sessions.',
+        },
+        REMOVE,
+        KEEP,
+      );
+      if (!how) return;
+      const passphrase = await vscode.window.showInputBox({
+        title: 'Claude Sync: choose an encryption passphrase',
+        prompt: 'At least 12 characters. Several unrelated words are easy to type and hard to guess.',
+        password: true,
+        ignoreFocusOut: true,
+        validateInput: (v) => (v.length < 12 ? 'At least 12 characters.' : undefined),
+      });
+      if (!passphrase) return;
+      const again = await vscode.window.showInputBox({
+        title: 'Claude Sync: type the passphrase again',
+        password: true,
+        ignoreFocusOut: true,
+        validateInput: (v) => (v && v !== passphrase ? 'Does not match.' : undefined),
+      });
+      if (again !== passphrase) return;
+      const meta = await progress('Claude Sync: turning on encryption…', () =>
+        s.transport.enable(passphrase, { removePlain: how === REMOVE }),
+      );
+      if (!meta) {
+        void vscode.window.showInformationMessage('Claude Sync: another device has just turned encryption on.');
+        return;
+      }
+      await context.secrets.store(passphraseKey(meta), passphrase).then(undefined, () => undefined);
+      const pick = await vscode.window.showInformationMessage(
+        'Claude Sync: encryption is on. Push now so this device stores its sessions encrypted; on your other devices, Pull and enter the passphrase.',
+        'Push now',
+      );
+      // After this command has released the one-operation-at-a-time lock.
+      if (pick)
+        setTimeout(() => {
+          void vscode.commands.executeCommand(`${SECTION}.push`);
+        }, 0);
     }),
     command('pull', async (s) => {
       const from = await chooseDevice(s.service, {

@@ -77,6 +77,9 @@ Todos los ajustes se aplican por equipo: defínelos en los ajustes de usuario (U
 
 ## Seguridad
 
+- **Cifrado** (opcional): **Claude Sync: Turn on encryption** cifra las sesiones almacenadas con una frase de paso
+  (AES-256-GCM, clave con scrypt). El almacenamiento solo ve archivos cifrados; cada otro dispositivo pide la frase
+  una vez. Una frase perdida no se puede recuperar. Los dispositivos con una versión anterior no ven las sesiones cifradas.
 - Antes de cada Push se revisan las sesiones que se van a enviar en busca de claves de API, tokens y claves privadas
   (AWS, GitHub, Anthropic, OpenAI, Slack, Stripe, Google, npm). Si se encuentra algo, verás qué sesiones son y podrás
   dejarlas fuera. Se desactiva con `claudeSessionSync.scanSecrets`.

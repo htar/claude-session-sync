@@ -50,14 +50,16 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 
 All settings apply per machine: set them in User settings.
 
-| Setting                               | Default   | What it does                                                                                                                                  |
-| ------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | empty     | `github`, `folder` (cloud storage) or `git`. Empty = ask on first use.                                                                        |
-| `claudeSessionSync.deviceName`        | host name | This device's name in the storage: other devices pick it when importing.                                                                      |
-| `claudeSessionSync.projectKey`        | empty     | Same value on every device to match a project without a git remote (or with different remotes). Empty = the git remote, else the folder name. |
-| `claudeSessionSync.repoUrl`           | empty     | Address of the private repository for the "own git" method.                                                                                   |
-| `claudeSessionSync.maxFileSizeMB`     | `90`      | Sessions larger than this are not pushed (and you are warned).                                                                                |
-| `claudeSessionSync.maxSessionAgeDays` | `30`      | Only sessions modified within the last N days are pushed. `0` = no limit.                                                                     |
+| Setting                               | Default                            | What it does                                                                                                                                  |
+| ------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | empty                              | `github`, `dropbox`, `onedrive`, `folder` (cloud storage folder) or `git`. Empty = ask on first use.                                          |
+| `claudeSessionSync.syncFolder`        | empty                              | Cloud storage folder method: the folder that holds the sessions. Filled in when you pick the storage.                                         |
+| `claudeSessionSync.claudeDir`         | empty                              | Claude Code's folder, if not `~/.claude` (else `CLAUDE_CONFIG_DIR`). Also passed to «Resume a session».                                       |
+| `claudeSessionSync.deviceName`        | host name, remembered on first use | This device's name in the storage: other devices pick it when importing.                                                                      |
+| `claudeSessionSync.projectKey`        | empty                              | Same value on every device to match a project without a git remote (or with different remotes). Empty = the git remote, else the folder name. |
+| `claudeSessionSync.repoUrl`           | empty                              | Address of the private repository for the "own git" method.                                                                                   |
+| `claudeSessionSync.maxFileSizeMB`     | `90`                               | Sessions larger than this are not pushed (and you are warned).                                                                                |
+| `claudeSessionSync.maxSessionAgeDays` | `30`                               | Only sessions modified within the last N days are pushed. `0` = no limit.                                                                     |
 
 ## If something goes wrong
 

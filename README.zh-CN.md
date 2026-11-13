@@ -49,14 +49,16 @@
 
 所有设置按机器生效：请在用户设置（User settings）中配置。
 
-| 设置                                  | 默认值   | 作用                                                                                                                |
-| ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | 空       | `github`、`folder`（云存储）或 `git`。为空 = 首次使用时询问。                                                       |
-| `claudeSessionSync.deviceName`        | 计算机名 | 此设备在存储中的名称：其他设备导入时选择它。                                                                        |
-| `claudeSessionSync.projectKey`        | 空       | 在所有设备上填写相同的值，用于匹配没有 git remote（或 remote 不同）的项目。空 = 使用 git remote，否则使用文件夹名。 |
-| `claudeSessionSync.repoUrl`           | 空       | “自己的 git”方式所用私有仓库的地址。                                                                                |
-| `claudeSessionSync.maxFileSizeMB`     | `90`     | 大于此值的会话不会被推送（并会给出提示）。                                                                          |
-| `claudeSessionSync.maxSessionAgeDays` | `30`     | 仅推送最近 N 天内修改过的会话。`0` = 不限制。                                                                       |
+| 设置                                  | 默认值                   | 作用                                                                                                                |
+| ------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | 空                       | `github`、`dropbox`、`onedrive`、`folder`（云存储文件夹）或 `git`。为空 = 首次使用时询问。                          |
+| `claudeSessionSync.syncFolder`        | 空                       | 云存储文件夹方式：存放会话的文件夹。选择存储时自动填写。                                                            |
+| `claudeSessionSync.claudeDir`         | 空                       | Claude Code 的文件夹（若不是 `~/.claude`，否则使用 `CLAUDE_CONFIG_DIR`）。也会传给 «Resume a session»。             |
+| `claudeSessionSync.deviceName`        | 计算机名，首次使用时记住 | 此设备在存储中的名称：其他设备导入时选择它。                                                                        |
+| `claudeSessionSync.projectKey`        | 空                       | 在所有设备上填写相同的值，用于匹配没有 git remote（或 remote 不同）的项目。空 = 使用 git remote，否则使用文件夹名。 |
+| `claudeSessionSync.repoUrl`           | 空                       | “自己的 git”方式所用私有仓库的地址。                                                                                |
+| `claudeSessionSync.maxFileSizeMB`     | `90`                     | 大于此值的会话不会被推送（并会给出提示）。                                                                          |
+| `claudeSessionSync.maxSessionAgeDays` | `30`                     | 仅推送最近 N 天内修改过的会话。`0` = 不限制。                                                                       |
 
 ## 出现问题时
 

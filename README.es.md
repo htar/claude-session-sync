@@ -50,14 +50,16 @@ Los comandos están en la Paleta de comandos: **Cmd+Shift+P** (Windows y Linux: 
 
 Todos los ajustes se aplican por equipo: defínelos en los ajustes de usuario (User settings).
 
-| Ajuste                                | Valor por defecto | Qué hace                                                                                                                                                  |
-| ------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `claudeSessionSync.mode`              | vacío             | `github`, `folder` (almacenamiento en la nube) o `git`. Vacío = preguntar la primera vez.                                                                 |
-| `claudeSessionSync.deviceName`        | nombre del equipo | Nombre de este dispositivo en el almacenamiento: los demás lo eligen al importar.                                                                         |
-| `claudeSessionSync.projectKey`        | vacío             | El mismo valor en todos los dispositivos para un proyecto sin git remote (o con remotes distintos). Vacío = el git remote, si no el nombre de la carpeta. |
-| `claudeSessionSync.repoUrl`           | vacío             | Dirección del repositorio privado para el método «git propio».                                                                                            |
-| `claudeSessionSync.maxFileSizeMB`     | `90`              | Las sesiones más grandes que esto no se envían (y se te avisa).                                                                                           |
-| `claudeSessionSync.maxSessionAgeDays` | `30`              | Solo se envían las sesiones modificadas en los últimos N días. `0` = sin límite.                                                                          |
+| Ajuste                                | Valor por defecto                             | Qué hace                                                                                                                                                  |
+| ------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claudeSessionSync.mode`              | vacío                                         | `github`, `dropbox`, `onedrive`, `folder` (carpeta de almacenamiento en la nube) o `git`. Vacío = preguntar la primera vez.                               |
+| `claudeSessionSync.syncFolder`        | vacío                                         | Método de carpeta en la nube: la carpeta con las sesiones. Se rellena al elegir el almacenamiento.                                                        |
+| `claudeSessionSync.claudeDir`         | vacío                                         | Carpeta de Claude Code si no es `~/.claude` (si no, `CLAUDE_CONFIG_DIR`). También se pasa a «Resume a session».                                           |
+| `claudeSessionSync.deviceName`        | nombre del equipo, se recuerda la primera vez | Nombre de este dispositivo en el almacenamiento: los demás lo eligen al importar.                                                                         |
+| `claudeSessionSync.projectKey`        | vacío                                         | El mismo valor en todos los dispositivos para un proyecto sin git remote (o con remotes distintos). Vacío = el git remote, si no el nombre de la carpeta. |
+| `claudeSessionSync.repoUrl`           | vacío                                         | Dirección del repositorio privado para el método «git propio».                                                                                            |
+| `claudeSessionSync.maxFileSizeMB`     | `90`                                          | Las sesiones más grandes que esto no se envían (y se te avisa).                                                                                           |
+| `claudeSessionSync.maxSessionAgeDays` | `30`                                          | Solo se envían las sesiones modificadas en los últimos N días. `0` = sin límite.                                                                          |
 
 ## Si algo sale mal
 

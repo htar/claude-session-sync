@@ -689,16 +689,33 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand(`${SECTION}.chooseMode`, async () => {
       const cfg = vscode.workspace.getConfiguration(SECTION);
+      const previous = { mode: cfg.get<string>('mode', ''), syncFolder: cfg.get<string>('syncFolder', '') };
+      // A sign-in or storage pick that was cancelled must not leave the old, working method forgotten.
+      const restore = async () => {
+        await cfg.update('mode', previous.mode, vscode.ConfigurationTarget.Global);
+        await cfg.update('syncFolder', previous.syncFolder, vscode.ConfigurationTarget.Global);
+      };
       const mode = await chooseMode(cfg, true);
       if (!mode) return;
       // Cloud storage needs its storage picked right away, so the next Push does not ask again.
       let where = describeMethod(vscode.workspace.getConfiguration(SECTION));
-      if (isCloudId(mode)) {
-        if (!(await cloudTransport(context, CLOUDS[mode]))) return;
-      } else if (mode === 'folder') {
-        const transport = await folderTransport();
-        if (!transport) return;
-        where = transport.root;
+      try {
+        if (isCloudId(mode)) {
+          if (!(await cloudTransport(context, CLOUDS[mode]))) {
+            await restore();
+            return;
+          }
+        } else if (mode === 'folder') {
+          const transport = await folderTransport();
+          if (!transport) {
+            await restore();
+            return;
+          }
+          where = transport.root;
+        }
+      } catch (e) {
+        await restore();
+        throw e;
       }
       void vscode.window.showInformationMessage(`Claude Sync: now using ${where}.`);
     }),

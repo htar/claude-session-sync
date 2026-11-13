@@ -1330,6 +1330,6 @@ test('SyncService over a MirrorTransport: two devices through a cloud store, del
   assert.deepEqual([...store.files.keys()], []);
 });
 
-test.skip('BUG: projectKey treats the host as the owner for a remote with a single path segment (`https://h/justone` gives `h_justone`, not the folder name)', () => {
+test('projectKey does not take the host as the owner (`https://h/justone` falls back to the folder name)', () => {
   assert.equal(projectKey('https://h/justone', '/w/x'), 'x');
 });

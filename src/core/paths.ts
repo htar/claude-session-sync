@@ -8,7 +8,11 @@ export function encodeProjectDir(workspacePath: string): string {
 
 /** Stable cross-device key: the git remote slug (`owner/repo`), else the folder name. */
 export function projectKey(remoteUrl: string | undefined, workspacePath: string): string {
-  const slug = remoteUrl?.trim().match(/[:/]([^/:]+\/[^/]+?)(?:\.git)?\/?$/)?.[1];
+  const url = remoteUrl?.trim() ?? '';
+  // In a URL the host is not part of the slug: `https://host/repo` has no owner, so it falls back to the folder name.
+  const scheme = url.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]*(\/.*)?$/i);
+  const slugSource = scheme ? (scheme[1] ?? '') : url;
+  const slug = slugSource.match(/[:/]([^/:]+\/[^/]+?)(?:\.git)?\/?$/)?.[1];
   return (slug ?? path.basename(workspacePath)).replace(/[^a-zA-Z0-9._-]+/g, '_');
 }
 

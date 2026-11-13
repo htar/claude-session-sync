@@ -263,20 +263,20 @@ test('exchangeCode: no refresh token, missing expires_in, 5xx, 403, corrupt JSON
   for (const status of [500, 503, 403, 429]) {
     const err = await exchangeCode(mk(() => json({ error: 'x' }, status)), cfgFor(), 'c', 'v').catch((e: unknown) => e);
     assert.ok(err instanceof Error && !(err instanceof CloudAuthError), String(status));
-    assert.match((err as Error).message, new RegExp(String(status)));
+    assert.match((err).message, new RegExp(String(status)));
   }
   for (const status of [400, 401]) {
     const err = await exchangeCode(mk(() => json({ error: 'invalid_grant' }, status)), cfgFor(), 'c', 'v').catch(
       (e: unknown) => e,
     );
     assert.ok(err instanceof CloudAuthError);
-    assert.match((err as Error).message, /invalid_grant/);
+    assert.match((err).message, /invalid_grant/);
   }
   const bad = await exchangeCode(mk(() => new Response('<html>', { status: 200 })), cfgFor(), 'c', 'v').catch(
     (e: unknown) => e,
   );
   assert.ok(bad instanceof Error);
-  assert.match((bad as Error).message, /200/);
+  assert.match((bad).message, /200/);
 });
 
 test('exchangeCode: a network failure propagates', async () => {
@@ -382,7 +382,7 @@ test('waitForAuthCode: a busy port gives a clear message', async () => {
 test('waitForAuthCode: an already aborted signal is not noticed until abort fires (cancel later works)', async () => {
   const port = await freePort();
   const ac = new AbortController();
-  const p = waitForAuthCode('S', `http://127.0.0.1:${port}/cb`, () => ac.abort(), { signal: ac.signal });
+  const p = waitForAuthCode('S', `http://127.0.0.1:${port}/cb`, () => { ac.abort(); }, { signal: ac.signal });
   await assert.rejects(p, /cancelled/);
 });
 
@@ -424,7 +424,7 @@ test('signIn: a cancelled sign-in never calls the token endpoint', async () => {
     return Promise.resolve(json({}));
   };
   await assert.rejects(
-    signIn(f, cfgFor({ redirectUri: `http://127.0.0.1:${port}/cb` }), () => ac.abort(), { signal: ac.signal }),
+    signIn(f, cfgFor({ redirectUri: `http://127.0.0.1:${port}/cb` }), () => { ac.abort(); }, { signal: ac.signal }),
     /cancelled/,
   );
   assert.equal(called, false);
@@ -636,11 +636,11 @@ test('pullRepo picks up a branch that appeared after an empty clone, and normal 
 
 const ghFetch = (routes: Record<string, () => Response>, seen: { url: string; init?: RequestInit }[] = []): typeof fetch =>
   ((input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input).replace('https://api.github.com', '');
+    const url = (input instanceof Request ? input.url : input.toString()).replace('https://api.github.com', '');
     seen.push({ url, init });
     const r = routes[url];
     return Promise.resolve(r ? r() : new Response('', { status: 404 }));
-  }) as typeof fetch;
+  });
 
 test('githubAuthEnv puts the token in the environment as a Basic header, not in argv', () => {
   const env = githubAuthEnv('tok');
@@ -662,7 +662,7 @@ test('ensurePrivateRepo: existing private repo, creation, public refusal, HTTP e
   );
   assert.equal(created.cloneUrl, 'new');
   const post = seen.find((s) => s.url === '/user/repos');
-  assert.equal(JSON.parse(post?.init?.body as string).private, true);
+  assert.equal((JSON.parse(post?.init?.body as string) as { private: boolean }).private, true);
   assert.equal((post?.init?.headers as Record<string, string>).Authorization, 'Bearer t');
 
   await assert.rejects(
@@ -684,7 +684,7 @@ test('ensurePrivateRepo: existing private repo, creation, public refusal, HTTP e
     ensurePrivateRepo('t', ghFetch({ '/user': me, '/user/repos': () => json({}, 422) })),
     /cannot create .*422/,
   );
-  await assert.rejects(ensurePrivateRepo('t', (() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch), /fetch failed/);
+  await assert.rejects(ensurePrivateRepo('t', (() => Promise.reject(new TypeError('fetch failed')))), /fetch failed/);
 });
 
 // ---------------------------------------------------------------- remote (MirrorTransport)
@@ -821,7 +821,7 @@ test('MirrorTransport.publish uploads an edit that keeps the byte length', async
 const rec = (handler: (url: string, init: RequestInit) => Response) => {
   const calls: { url: string; init: RequestInit }[] = [];
   const fetchFn: FetchFn = (input, init) => {
-    const url = String(input);
+    const url = input instanceof Request ? input.url : input.toString();
     calls.push({ url, init: init ?? {} });
     return Promise.resolve(handler(url, init ?? {}));
   };
@@ -847,7 +847,7 @@ test('DropboxClient: pagination through list_folder/continue, folders skipped, l
     { rel: 'd/a.jsonl', size: 0 },
     { rel: 'b.jsonl', size: 2 },
   ]);
-  assert.equal(JSON.parse(r.calls[1]?.init.body as string).cursor, 'CUR');
+  assert.equal((JSON.parse(r.calls[1]?.init.body as string) as { cursor: string }).cursor, 'CUR');
   assert.equal((r.calls[0]?.init.headers as Record<string, string>).authorization, 'Bearer TOKEN');
 });
 
@@ -859,7 +859,7 @@ test('DropboxClient: 401 is an auth error, 403/429/5xx are plain errors with the
     for (const status of [403, 429, 500, 503]) {
       const err = await call(new DropboxClient(rec(() => new Response('nope', { status })).fetchFn, tok)).catch((e: unknown) => e);
       assert.ok(err instanceof Error && !(err instanceof CloudAuthError), `${op} ${status}`);
-      assert.match((err as Error).message, new RegExp(`${status}.*nope`));
+      assert.match((err).message, new RegExp(`${status}.*nope`));
     }
   }
   await new DropboxClient(rec(() => new Response('', { status: 409 })).fetchFn, tok).remove('gone');
@@ -1085,7 +1085,7 @@ test('listSessions: missing dir, ordering, foreign files ignored', () => {
   const l = listSessions(d);
   assert.deepEqual(l.map((s) => s.id), ['new', 'old']);
   assert.equal(l[0]?.title, 'n');
-  assert.equal(l[0]?.bytes, userLineAt('n', '2024-01-01T00:00:00Z').length);
+  assert.equal(l[0].bytes, userLineAt('n', '2024-01-01T00:00:00Z').length);
 });
 
 // ---------------------------------------------------------------- syncService
@@ -1261,13 +1261,13 @@ test('SyncService: a corrupt device marker is treated as unclaimed; a marker wit
   const dir = path.join(store, 'devices', 'A');
   write(dir, 'device.json', '{not json');
   await svc(new FolderTransport(store), local, 'A', { installId: 'one' }).push();
-  assert.equal(JSON.parse(read(dir, 'device.json')).id, 'one');
+  assert.equal((JSON.parse(read(dir, 'device.json')) as { id: string }).id, 'one');
   write(dir, 'device.json', JSON.stringify({ name: 'A' }));
   await svc(new FolderTransport(store), local, 'A', { installId: 'two' }).push();
-  assert.equal(JSON.parse(read(dir, 'device.json')).id, 'two');
+  assert.equal((JSON.parse(read(dir, 'device.json')) as { id: string }).id, 'two');
   await assert.rejects(svc(new FolderTransport(store), local, 'A', { installId: 'three' }).push(), DeviceNameTakenError);
   await svc(new FolderTransport(store), local, 'A', { installId: 'three' }).push({ takeOver: true });
-  assert.equal(JSON.parse(read(dir, 'device.json')).id, 'three');
+  assert.equal((JSON.parse(read(dir, 'device.json')) as { id: string }).id, 'three');
 });
 
 test('SyncService: a refused push (name taken) copies nothing and does not publish', async () => {
@@ -1280,7 +1280,7 @@ test('SyncService: a refused push (name taken) copies nothing and does not publi
   const spy = { root: t.root, refresh: () => t.refresh(), publish: (m: string, n: number) => (published++, t.publish(m, n)) };
   const err = await svc(spy, local, 'A', { installId: 'me' }).push().catch((e: unknown) => e);
   assert.ok(err instanceof DeviceNameTakenError);
-  assert.equal((err as DeviceNameTakenError).device, 'A');
+  assert.equal((err).device, 'A');
   assert.equal(published, 0);
   assert.equal(fs.existsSync(path.join(store, 'devices', 'A', 'projects')), false);
 });

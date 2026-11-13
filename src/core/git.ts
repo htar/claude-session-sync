@@ -70,11 +70,21 @@ async function identityArgs(repoDir: string): Promise<string[]> {
   return args;
 }
 
-/** Returns false when there was nothing to commit. */
+/** Commits not on the remote yet: a push that failed earlier (network, a lost race) left them behind. */
+async function hasUnpushed(repoDir: string): Promise<boolean> {
+  if (!(await succeeds(repoDir, ['rev-parse', '--verify', 'HEAD']))) return false;
+  const ahead = await git(repoDir, ['rev-list', '--count', '@{u}..HEAD']).catch(() => undefined);
+  return ahead === undefined || Number(ahead) > 0; // no upstream yet: the branch was never pushed
+}
+
+/** Returns false when there was nothing to commit and nothing left unpushed. */
 export async function commitAndPush(repoDir: string, message: string, env?: GitEnv): Promise<boolean> {
   await git(repoDir, ['add', '-A']);
-  if (!(await git(repoDir, ['status', '--porcelain']))) return false;
-  await git(repoDir, [...(await identityArgs(repoDir)), 'commit', '-m', message]);
+  if (await git(repoDir, ['status', '--porcelain'])) {
+    await git(repoDir, [...(await identityArgs(repoDir)), 'commit', '-m', message]);
+  } else if (!(await hasUnpushed(repoDir))) {
+    return false;
+  }
   await git(repoDir, ['push', '-u', 'origin', 'HEAD'], env);
   return true;
 }

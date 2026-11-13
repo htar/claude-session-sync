@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Transport } from './transport';
@@ -41,6 +42,8 @@ function pruneEmptyDirs(dir: string, isRoot = true): void {
   if (!isRoot && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
 }
 
+const digest = (file: string): string => crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex');
+
 const localPath = (root: string, rel: string): string => path.join(root, ...rel.split('/'));
 
 /**
@@ -49,6 +52,8 @@ const localPath = (root: string, rel: string): string => path.join(root, ...rel.
  */
 export class MirrorTransport implements Transport {
   private remote = new Map<string, number>();
+  /** Content hash of each cached file as it is in the cloud: an edit that keeps the size must still be uploaded. */
+  private known = new Map<string, string>();
 
   constructor(
     readonly root: string,
@@ -76,8 +81,11 @@ export class MirrorTransport implements Transport {
       fs.writeFileSync(tmp, data);
       fs.renameSync(tmp, local);
     }
+    this.known.clear();
     for (const f of walk(this.root)) {
-      if (!this.remote.has(f.rel)) fs.rmSync(localPath(this.root, f.rel));
+      const file = localPath(this.root, f.rel);
+      if (!this.remote.has(f.rel)) fs.rmSync(file);
+      else this.known.set(f.rel, digest(file));
     }
     pruneEmptyDirs(this.root);
   }
@@ -86,11 +94,15 @@ export class MirrorTransport implements Transport {
     const local = walk(this.root);
     const localRels = new Set(local.map((f) => f.rel));
     let changed = false;
-    const toUpload = local.filter((f) => this.remote.get(f.rel) !== f.size);
+    const hashes = new Map(local.map((f) => [f.rel, digest(localPath(this.root, f.rel))]));
+    const toUpload = local.filter(
+      (f) => this.remote.get(f.rel) !== f.size || this.known.get(f.rel) !== hashes.get(f.rel),
+    );
     for (const [i, f] of toUpload.entries()) {
       this.onProgress(`Uploading ${i + 1}/${toUpload.length}: ${path.basename(f.rel)}`);
       await this.store.upload(f.rel, fs.readFileSync(localPath(this.root, f.rel)));
       this.remote.set(f.rel, f.size);
+      this.known.set(f.rel, hashes.get(f.rel) ?? '');
       changed = true;
     }
     const toRemove = [...this.remote.keys()].filter((rel) => !localRels.has(rel));
@@ -98,6 +110,7 @@ export class MirrorTransport implements Transport {
       this.onProgress(`Deleting ${i + 1}/${toRemove.length}: ${path.basename(rel)}`);
       await this.store.remove(rel);
       this.remote.delete(rel);
+      this.known.delete(rel);
       changed = true;
     }
     return changed;

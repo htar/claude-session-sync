@@ -804,7 +804,7 @@ test('MirrorTransport: a large file (5 MB) round-trips', async () => {
   assert.equal(store.files.get('big.jsonl')?.length, big.length);
 });
 
-test.skip('BUG: MirrorTransport.publish detects changes by size only, so an edit that keeps the byte length is never uploaded', async () => {
+test('MirrorTransport.publish uploads an edit that keeps the byte length', async () => {
   const store = new MemStore();
   const root = tmp();
   const m = new MirrorTransport(root, store);

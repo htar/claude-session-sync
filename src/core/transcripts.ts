@@ -78,6 +78,7 @@ export function copyTranscripts(src: string, dst: string, options: CopyOptions =
     const from = path.join(src, name);
     const to = path.join(dst, name);
     const stat = fs.statSync(from);
+    if (!stat.isFile()) continue; // a folder that happens to be named like a session
     if (stat.size === 0) continue; // Claude leaves empty session files behind: nothing to sync
     if (options.modifiedAfterMs !== undefined && stat.mtimeMs < options.modifiedAfterMs) {
       result.tooOld++;
@@ -210,6 +211,7 @@ export function listSessions(dir: string): SessionInfo[] {
     if (!SESSION_FILE.test(name)) continue;
     const file = path.join(dir, name);
     const stat = fs.statSync(file);
+    if (!stat.isFile()) continue;
     if (stat.size === 0) continue; // an empty file is not a session worth resuming
     out.push({
       id: name.slice(0, -'.jsonl'.length),

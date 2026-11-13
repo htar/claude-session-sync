@@ -970,11 +970,12 @@ test('copyTranscripts: missing source, empty files, non-session names, traversal
   assert.deepEqual(fs.readdirSync(dst), ['ok-1.jsonl']);
 });
 
-test.skip('BUG: a directory named like a session (`x.jsonl/`) makes copyTranscripts throw instead of being skipped', () => {
+test('a directory named like a session (`x.jsonl/`) is skipped by copyTranscripts', () => {
   const src = tmp();
   fs.mkdirSync(path.join(src, 'dir.jsonl'));
   fs.writeFileSync(path.join(src, 'dir.jsonl', 'f'), 'x');
   assert.doesNotThrow(() => copyTranscripts(src, tmp()));
+  assert.deepEqual(listSessions(src), []);
 });
 
 test('copyTranscripts: tmp files are not left behind; extended source overwrites, shorter source is skipped, diverged is a conflict', () => {

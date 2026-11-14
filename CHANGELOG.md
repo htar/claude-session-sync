@@ -7,12 +7,16 @@
 - The Google client secret is compiled in at build time (`scripts/build.mjs`), never committed; a build without it
   hides the method.
 
-## Unreleased
+## 0.10.0
 
 - Optional end-to-end encryption: «Turn on encryption» encrypts the stored sessions with a passphrase (AES-256-GCM,
   scrypt). Works with every sync method; other devices ask for the passphrase once and keep it in the secret store.
 - Before a push, the sessions about to be sent are checked for API keys, tokens and private keys; you see which ones and
   can leave them out (`claudeSessionSync.scanSecrets`, on by default).
+- Fixes: a failed push is retried instead of reporting «nothing new»; an edit that keeps the file size reaches Dropbox
+  and OneDrive; a refused token is refreshed before asking to sign in; «Resume a session» works offline; credentials
+  are hidden in the log; the default device name no longer changes with the network; sub-agent logs are not listed as
+  sessions; one unreadable file no longer stops the whole push or pull.
 
 ## 0.8.0
 

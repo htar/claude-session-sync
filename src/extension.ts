@@ -970,6 +970,16 @@ export function activate(context: vscode.ExtensionContext): void {
         { placeHolder: 'Choose a session to resume', matchOnDetail: true },
       );
       if (!pick?.detail) return;
+      // The Claude Code extension opens a session by id itself: no `claude` command needed in the terminal's PATH
+      // (often missing on Windows). It does not know a custom Claude folder, so that case still uses the terminal.
+      if (!claudeDir && (await vscode.commands.getCommands(true)).includes('claude-vscode.editor.open')) {
+        try {
+          await vscode.commands.executeCommand('claude-vscode.editor.open', pick.detail);
+          return;
+        } catch (e) {
+          log.error(`Opening the session in Claude Code failed, using the terminal: ${String(e)}`);
+        }
+      }
       const terminal = vscode.window.createTerminal({
         name: 'Claude (resumed)',
         cwd: folder,

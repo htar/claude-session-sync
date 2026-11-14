@@ -37,13 +37,14 @@
 
 ## 同步方式
 
-| 方式                 | 你需要                                                                   | 会发生什么                                                                                                            |
-| -------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| **GitHub**           | 一个 GitHub 账号                                                         | 通过 VS Code 一键登录，自动创建私有仓库 `claude-sessions`。同名公开仓库会被拒绝。                                     |
-| **Dropbox（直连）**  | 一个 Dropbox 账号                                                        | 在浏览器中一键登录，电脑上无需安装 Dropbox 应用。文件保存在你的 Dropbox 的 `Apps/Session Sync for Claude Code` 中。   |
-| **OneDrive（直连）** | 一个 Microsoft 账号                                                      | 在浏览器中一键登录，电脑上无需安装 OneDrive 应用。文件保存在你的 OneDrive 的 `Apps/Session Sync for Claude Code` 中。 |
-| **云存储**           | iCloud Drive、Google Drive、MEGA、pCloud、Box、Proton Drive 或 Nextcloud | 从列表中选择云服务，在其根目录创建“Claude Sessions”文件夹，文件由云客户端负责送达。                                   |
-| **自己的 git 仓库**  | 你可以访问的私有仓库（SSH 或 credential helper）                         | 在 `claudeSessionSync.repoUrl` 中填写其地址。                                                                         |
+| 方式                     | 你需要                                                     | 会发生什么                                                                                                                                            |
+| ------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub**               | 一个 GitHub 账号                                           | 通过 VS Code 一键登录，自动创建私有仓库 `claude-sessions`。同名公开仓库会被拒绝。                                                                     |
+| **Dropbox（直连）**      | 一个 Dropbox 账号                                          | 在浏览器中一键登录，电脑上无需安装 Dropbox 应用。文件保存在你的 Dropbox 的 `Apps/Session Sync for Claude Code` 中。                                   |
+| **OneDrive（直连）**     | 一个 Microsoft 账号                                        | 在浏览器中一键登录，电脑上无需安装 OneDrive 应用。文件保存在你的 OneDrive 的 `Apps/Session Sync for Claude Code` 中。                                 |
+| **Google Drive（直连）** | 一个 Google 账号                                           | 在浏览器中一键登录，电脑上无需安装 Google Drive 应用。文件保存在你 Drive 的隐藏应用文件夹中（Drive 界面不可见；可在 Drive → 设置 → 管理应用中移除）。 |
+| **云存储**               | iCloud Drive、MEGA、pCloud、Box、Proton Drive 或 Nextcloud | 从列表中选择云服务，在其根目录创建“Claude Sessions”文件夹，文件由云客户端负责送达。                                                                   |
+| **自己的 git 仓库**      | 你可以访问的私有仓库（SSH 或 credential helper）           | 在 `claudeSessionSync.repoUrl` 中填写其地址。                                                                                                         |
 
 ## 设置
 

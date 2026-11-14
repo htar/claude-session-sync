@@ -38,13 +38,14 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 
 ## Ways to sync
 
-| Method                      | You need                                                                                                   | What happens                                                                                                                                |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **GitHub**                  | A GitHub account                                                                                           | One-click sign-in through VS Code; a private `claude-sessions` repository is created for you. A public one with that name is refused.       |
-| **Dropbox (direct)**        | A Dropbox account                                                                                          | One-click sign-in in the browser, no Dropbox app needed on the computer. Files go to `Apps/Session Sync for Claude Code` in your Dropbox.   |
-| **OneDrive (direct)**       | A Microsoft account                                                                                        | One-click sign-in in the browser, no OneDrive app needed on the computer. Files go to `Apps/Session Sync for Claude Code` in your OneDrive. |
-| **Cloud storage**           | iCloud Drive, Google Drive, MEGA, pCloud, Box, Proton Drive or Nextcloud (their own app must be installed) | You pick the storage from a list, a "Claude Sessions" folder is created at its root, and the cloud client delivers the files.               |
-| **Your own git repository** | A private repository you can reach (SSH or a credential helper)                                            | Put its address in `claudeSessionSync.repoUrl`.                                                                                             |
+| Method                      | You need                                                                                     | What happens                                                                                                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub**                  | A GitHub account                                                                             | One-click sign-in through VS Code; a private `claude-sessions` repository is created for you. A public one with that name is refused.                                                                   |
+| **Dropbox (direct)**        | A Dropbox account                                                                            | One-click sign-in in the browser, no Dropbox app needed on the computer. Files go to `Apps/Session Sync for Claude Code` in your Dropbox.                                                               |
+| **OneDrive (direct)**       | A Microsoft account                                                                          | One-click sign-in in the browser, no OneDrive app needed on the computer. Files go to `Apps/Session Sync for Claude Code` in your OneDrive.                                                             |
+| **Google Drive (direct)**   | A Google account                                                                             | One-click sign-in in the browser, no Google Drive app needed on the computer. Files go to a hidden app folder of your Drive (not visible in the Drive UI, removable in Drive → Settings → Manage apps). |
+| **Cloud storage**           | iCloud Drive, MEGA, pCloud, Box, Proton Drive or Nextcloud (their own app must be installed) | You pick the storage from a list, a "Claude Sessions" folder is created at its root, and the cloud client delivers the files.                                                                           |
+| **Your own git repository** | A private repository you can reach (SSH or a credential helper)                              | Put its address in `claudeSessionSync.repoUrl`.                                                                                                                                                         |
 
 ## Settings
 
@@ -96,3 +97,5 @@ All settings apply per machine: set them in User settings.
 - Syncing is manual; there is no background mode.
 
 Source code and issues: https://github.com/htar/claude-session-sync
+
+Privacy policy: https://github.com/htar/claude-session-sync/blob/main/PRIVACY.md

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- New method **Google Drive (direct)**: browser sign-in, files in the hidden app folder of your Drive (`drive.appdata`,
+  the app sees nothing else). Changed files are updated in place; the newest of two files with one name wins.
+- The Google client secret is compiled in at build time (`scripts/build.mjs`), never committed; a build without it
+  hides the method.
+
 ## Unreleased
 
 - Optional end-to-end encryption: «Turn on encryption» encrypts the stored sessions with a passphrase (AES-256-GCM,

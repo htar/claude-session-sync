@@ -5,7 +5,8 @@ const ACCESS =
   /Sync folder not found|HTTP 40[13]|returned error: 40[13]|authentication failed|could not read (username|password)|Permission denied \(publickey|not authorized|repository not found|sign.?in|rejected the sign-in/i;
 const NETWORK =
   /fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|getaddrinfo|Could not resolve host|Network is unreachable|Failed to connect|unable to access/i;
-const FULL = /insufficient_space|insufficientStorage|storage quota|quotaLimitReached|No space left/i;
+const FULL =
+  /insufficient_space|insufficientStorage|storageQuotaExceeded|storage quota|quotaLimitReached|No space left/i;
 
 /** What kind of failure a message describes, so the user gets advice instead of a raw error text. */
 export function classifyError(message: string): ErrorKind {

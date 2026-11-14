@@ -2,7 +2,7 @@
   "name": "claude-session-sync",
   "displayName": "Session Sync for Claude Code",
   "description": "Continue a Claude Code session on another device. Sync your session history through GitHub, iCloud Drive, Dropbox, OneDrive, Google Drive and more, and choose which sessions to bring over.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "tkhmelovskyi",
   "icon": "images/icon.png",
   "repository": {
@@ -100,6 +100,7 @@
             "github",
             "dropbox",
             "onedrive",
+            "googledrive",
             "folder",
             "git"
           ],
@@ -108,6 +109,7 @@
             "Sign in with GitHub; a private claude-sessions repository is created automatically.",
             "Dropbox, signed in directly in the browser (no Dropbox app needed).",
             "OneDrive, signed in directly in the browser (no OneDrive app needed).",
+            "Google Drive, signed in directly in the browser (no Google Drive app needed).",
             "A folder kept in sync by a storage's own app: iCloud Drive, Google Drive, MEGA, pCloud, Box, Proton Drive, Nextcloud…",
             "Your own private git repository (claudeSessionSync.repoUrl)."
           ],
@@ -170,8 +172,8 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --platform=node --target=node18 --external:vscode --sourcemap --outfile=dist/extension.js",
-    "build:prod": "esbuild src/extension.ts --bundle --platform=node --target=node18 --external:vscode --minify --outfile=dist/extension.js",
+    "build": "node scripts/build.mjs",
+    "build:prod": "node scripts/build.mjs --prod",
     "typecheck": "tsc -p . --noEmit",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",

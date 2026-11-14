@@ -61,6 +61,7 @@ const CACHE_DIR: Record<Mode, string | undefined> = {
   git: 'repo',
   dropbox: 'dropbox-cache',
   onedrive: 'onedrive-cache',
+  googledrive: 'googledrive-cache',
   folder: undefined,
 };
 
@@ -104,6 +105,11 @@ const METHODS: (vscode.QuickPickItem & { mode: Mode })[] = [
     description: 'Sign in in the browser; no OneDrive app needed on this computer',
   },
   {
+    mode: 'googledrive',
+    label: '$(cloud) Google Drive (direct)',
+    description: 'Sign in in the browser; files live in a hidden app folder of your Drive',
+  },
+  {
     mode: 'folder',
     label: '$(folder) Cloud folder on this computer',
     description: "iCloud Drive, Google Drive, MEGA, pCloud, Box… (the storage's own app syncs it)",
@@ -136,6 +142,7 @@ const STATUS_LABEL_BY_MODE: Record<Mode, string> = {
   github: 'GitHub',
   dropbox: 'Dropbox',
   onedrive: 'OneDrive',
+  googledrive: 'Google Drive',
   folder: 'Cloud folder',
   git: 'Git',
 };
@@ -165,7 +172,9 @@ async function chooseMode(
     pull: 'Claude Sync: where are the sessions from your other device? (pick the method it pushed with)',
     none: 'Claude Sync: how should sessions travel between your devices?',
   }[intent ?? 'none'];
-  const pick = await vscode.window.showQuickPick(METHODS, {
+  // A method whose app is not registered yet (empty public id) is not offered.
+  const offered = METHODS.filter((m) => !isCloudId(m.mode) || CLOUDS[m.mode].available);
+  const pick = await vscode.window.showQuickPick(offered, {
     title,
     placeHolder: 'You can change this later with «Claude Sync: Choose sync method»',
   });
@@ -350,6 +359,7 @@ async function openSession(
     github: () => githubTransport(context),
     dropbox: () => cloudTransport(context, CLOUDS.dropbox),
     onedrive: () => cloudTransport(context, CLOUDS.onedrive),
+    googledrive: () => cloudTransport(context, CLOUDS.googledrive),
     folder: () => folderTransport(),
     git: () => gitTransport(context, cfg),
   }[mode]();

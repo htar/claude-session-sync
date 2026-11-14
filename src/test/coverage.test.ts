@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as net from 'node:net';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { CLOUDS, isCloudId } from '../core/cloud';
@@ -1586,4 +1587,20 @@ test('tokenProvider: fresh skips the cached access token', async () => {
   assert.equal(await token(), 'T1');
   assert.equal(await token(), 'T1');
   assert.equal(await token({ fresh: true }), 'T2');
+});
+
+test('listSessions leaves out sub-agent logs; copyTranscripts reports a file it cannot read and copies the rest', () => {
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'css-agent-'));
+  const dst = fs.mkdtempSync(path.join(os.tmpdir(), 'css-agent-dst-'));
+  const line = '{"type":"user","message":{"content":"hi"}}\n';
+  fs.writeFileSync(path.join(src, 'agent-abc123.jsonl'), line);
+  fs.writeFileSync(path.join(src, 'good.jsonl'), line);
+  fs.symlinkSync(path.join(src, 'missing'), path.join(src, 'broken.jsonl'));
+  assert.deepEqual(
+    listSessions(src).map((s) => s.id),
+    ['good'],
+  );
+  const result = copyTranscripts(src, dst);
+  assert.deepEqual(result.failed, ['broken.jsonl']);
+  assert.ok(result.copied.includes('good.jsonl'));
 });

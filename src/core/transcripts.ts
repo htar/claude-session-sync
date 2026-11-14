@@ -36,6 +36,8 @@ export interface CopyResult {
   tooOld: number;
   /** iCloud placeholders (`.<name>.icloud`): the file exists in the folder but has not been downloaded yet. */
   notDownloaded: number;
+  /** Could not be read or written (locked, removed in the meantime, no permission): the rest was still copied. */
+  failed: string[];
 }
 
 /** True when the whole of `shorter` is the beginning of `longer` — i.e. `longer` is the same transcript, extended. */
@@ -73,7 +75,15 @@ function atomicCopy(from: string, to: string): void {
  * An old file is left out before it is looked at, so a huge old session is not reported as too large.
  */
 export function copyTranscripts(src: string, dst: string, options: CopyOptions = {}): CopyResult {
-  const result: CopyResult = { copied: [], skipped: [], conflicts: [], tooLarge: [], tooOld: 0, notDownloaded: 0 };
+  const result: CopyResult = {
+    copied: [],
+    skipped: [],
+    conflicts: [],
+    tooLarge: [],
+    tooOld: 0,
+    notDownloaded: 0,
+    failed: [],
+  };
   if (!fs.existsSync(src)) return result;
   const copy = (from: string, to: string): void => {
     if (options.dryRun) return;
@@ -83,11 +93,20 @@ export function copyTranscripts(src: string, dst: string, options: CopyOptions =
   for (const name of fs.readdirSync(src)) {
     if (ICLOUD_PLACEHOLDER.test(name)) result.notDownloaded++;
     if (!SESSION_FILE.test(name) || (options.only && !options.only.has(name)) || options.exclude?.has(name)) continue;
+    try {
+      copyOne(name);
+    } catch {
+      result.failed.push(name);
+    }
+  }
+  return result;
+
+  function copyOne(name: string): void {
     const from = path.join(src, name);
     const to = path.join(dst, name);
     const stat = fs.statSync(from);
-    if (!stat.isFile()) continue; // a folder that happens to be named like a session
-    if (stat.size === 0) continue; // Claude leaves empty session files behind: nothing to sync
+    if (!stat.isFile()) return; // a folder that happens to be named like a session
+    if (stat.size === 0) return; // Claude leaves empty session files behind: nothing to sync
     if (options.modifiedAfterMs !== undefined && stat.mtimeMs < options.modifiedAfterMs) {
       result.tooOld++;
     } else if (options.maxBytes !== undefined && stat.size > options.maxBytes) {
@@ -104,7 +123,6 @@ export function copyTranscripts(src: string, dst: string, options: CopyOptions =
       result.conflicts.push(name);
     }
   }
-  return result;
 }
 
 export type SessionStatus = 'new' | 'updated' | 'same' | 'conflict';
@@ -216,17 +234,20 @@ export function listSessions(dir: string): SessionInfo[] {
   if (!fs.existsSync(dir)) return [];
   const out: SessionInfo[] = [];
   for (const name of fs.readdirSync(dir)) {
-    if (!SESSION_FILE.test(name)) continue;
+    if (!SESSION_FILE.test(name) || name.startsWith('agent-')) continue; // sub-agent logs cannot be resumed
     const file = path.join(dir, name);
-    const stat = fs.statSync(file);
-    if (!stat.isFile()) continue;
-    if (stat.size === 0) continue; // an empty file is not a session worth resuming
-    out.push({
-      id: name.slice(0, -'.jsonl'.length),
-      bytes: stat.size,
-      title: readTitle(file),
-      lastActivity: lastActivity(file, stat),
-    });
+    try {
+      const stat = fs.statSync(file);
+      if (!stat.isFile() || stat.size === 0) continue; // an empty file is not a session worth resuming
+      out.push({
+        id: name.slice(0, -'.jsonl'.length),
+        bytes: stat.size,
+        title: readTitle(file),
+        lastActivity: lastActivity(file, stat),
+      });
+    } catch {
+      // unreadable or gone in the meantime: leave it out of the list
+    }
   }
   return out.sort((a, b) => b.lastActivity - a.lastActivity);
 }

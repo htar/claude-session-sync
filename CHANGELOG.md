@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.3
+
+- The log («Show log») now records the extension version at start and what «Resume a session» found and started.
+
 ## 0.10.2
 
 - «Resume a session» starts the `claude` binary that ships with the Claude Code extension, so it works where `claude`

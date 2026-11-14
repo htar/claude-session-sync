@@ -595,22 +595,31 @@ const progress = <T>(title: string, task: () => Promise<T>) =>
     }
   });
 
-/** The `claude` binary inside the installed Claude Code extension, if there is one. */
-function bundledClaude(): string | undefined {
+/** The `claude` binary inside the installed Claude Code extension, if there is one; `why` says what was looked at. */
+function bundledClaude(log: Logger): string | undefined {
   const ext = vscode.extensions.getExtension('anthropic.claude-code');
-  if (!ext) return undefined;
+  if (!ext) {
+    const similar = vscode.extensions.all.filter((e) => /claude/i.test(e.id)).map((e) => e.id);
+    log.info(`Resume: extension anthropic.claude-code not found (claude-like: ${similar.join(', ') || 'none'}).`);
+    return undefined;
+  }
   const file = path.join(
     ext.extensionPath,
     'resources',
     'native-binary',
     process.platform === 'win32' ? 'claude.exe' : 'claude',
   );
-  return fs.existsSync(file) ? file : undefined;
+  const exists = fs.existsSync(file);
+  log.info(
+    `Resume: Claude Code ${ext.packageJSON ? String((ext.packageJSON as { version?: string }).version) : '?'} at ${ext.extensionPath}; binary ${file} ${exists ? 'found' : 'MISSING'}.`,
+  );
+  return exists ? file : undefined;
 }
 
 export function activate(context: vscode.ExtensionContext): void {
   const channel = vscode.window.createOutputChannel('Claude Session Sync');
   const log = channelLogger(channel);
+  log.info(`Claude Session Sync ${String((context.extension.packageJSON as { version?: string }).version)} started.`);
 
   /** The chosen storage cannot be reached or the account is not signed in: offer to reconnect instead of a bare error. */
   const reconnect = async (message: string): Promise<boolean> => {
@@ -984,8 +993,11 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (!pick?.detail) return;
       // `claude` is often not in the terminal's PATH (common on Windows): the Claude Code extension ships its own binary.
-      const binary = bundledClaude();
+      const binary = bundledClaude(log);
       const env = claudeDir ? { CLAUDE_CONFIG_DIR: claudeDir } : undefined;
+      log.info(
+        `Resume ${pick.detail}: ${binary ? `starting ${binary}` : 'no bundled binary, typing «claude» in a terminal'}; cwd ${folder}.`,
+      );
       if (binary) {
         vscode.window
           .createTerminal({

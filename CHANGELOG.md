@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.1
 
 - «Resume a session» opens the session in the Claude Code extension itself, so it works where the `claude` command is
   not in the terminal's PATH (common on Windows); the terminal is used only when a custom Claude folder is set.

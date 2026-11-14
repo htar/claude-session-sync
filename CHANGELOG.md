@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.2
+
+- «Resume a session» starts the `claude` binary that ships with the Claude Code extension, so it works where `claude`
+  is not in the terminal's PATH (common on Windows); without that extension it falls back to `claude` in the terminal.
+
 ## 0.10.1
 
 - «Resume a session» opens the session in the Claude Code extension itself, so it works where the `claude` command is

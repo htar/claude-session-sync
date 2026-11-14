@@ -595,6 +595,19 @@ const progress = <T>(title: string, task: () => Promise<T>) =>
     }
   });
 
+/** The `claude` binary inside the installed Claude Code extension, if there is one. */
+function bundledClaude(): string | undefined {
+  const ext = vscode.extensions.getExtension('anthropic.claude-code');
+  if (!ext) return undefined;
+  const file = path.join(
+    ext.extensionPath,
+    'resources',
+    'native-binary',
+    process.platform === 'win32' ? 'claude.exe' : 'claude',
+  );
+  return fs.existsSync(file) ? file : undefined;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const channel = vscode.window.createOutputChannel('Claude Session Sync');
   const log = channelLogger(channel);
@@ -970,22 +983,22 @@ export function activate(context: vscode.ExtensionContext): void {
         { placeHolder: 'Choose a session to resume', matchOnDetail: true },
       );
       if (!pick?.detail) return;
-      // The Claude Code extension opens a session by id itself: no `claude` command needed in the terminal's PATH
-      // (often missing on Windows). It does not know a custom Claude folder, so that case still uses the terminal.
-      if (!claudeDir && (await vscode.commands.getCommands(true)).includes('claude-vscode.editor.open')) {
-        try {
-          await vscode.commands.executeCommand('claude-vscode.editor.open', pick.detail);
-          return;
-        } catch (e) {
-          log.error(`Opening the session in Claude Code failed, using the terminal: ${String(e)}`);
-        }
+      // `claude` is often not in the terminal's PATH (common on Windows): the Claude Code extension ships its own binary.
+      const binary = bundledClaude();
+      const env = claudeDir ? { CLAUDE_CONFIG_DIR: claudeDir } : undefined;
+      if (binary) {
+        vscode.window
+          .createTerminal({
+            name: 'Claude (resumed)',
+            cwd: folder,
+            env,
+            shellPath: binary,
+            shellArgs: ['--resume', pick.detail],
+          })
+          .show();
+        return;
       }
-      const terminal = vscode.window.createTerminal({
-        name: 'Claude (resumed)',
-        cwd: folder,
-        // A custom Claude folder must reach Claude Code too, or it would look for the session in ~/.claude.
-        env: claudeDir ? { CLAUDE_CONFIG_DIR: claudeDir } : undefined,
-      });
+      const terminal = vscode.window.createTerminal({ name: 'Claude (resumed)', cwd: folder, env });
       terminal.show();
       terminal.sendText(`claude --resume ${pick.detail}`);
     }),

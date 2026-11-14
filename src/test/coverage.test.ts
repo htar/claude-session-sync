@@ -238,7 +238,9 @@ test('retryingFetch passes the request through unchanged', async () => {
   };
   await retryingFetch(f)('https://x/y', { method: 'PUT', body: 'abc' });
   assert.equal(seen[0], 'https://x/y');
-  assert.deepEqual(seen[1], { method: 'PUT', body: 'abc' });
+  const init = seen[1] as RequestInit;
+  assert.equal(init.method, 'PUT');
+  assert.equal(init.body, 'abc');
 });
 
 // ---------------------------------------------------------------- oauth

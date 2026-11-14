@@ -84,3 +84,20 @@ test('credentials never reach the log or a notification', () => {
   assert.equal(redactSecrets(`token ghp_${'a'.repeat(36)} used`), 'token *** used');
   assert.equal(redactSecrets('nothing to hide'), 'nothing to hide');
 });
+
+test('a request that never answers is given up and retried instead of hanging', async () => {
+  let calls = 0;
+  const fetchFn: FetchFn = (_input, init) => {
+    calls++;
+    if (calls === 1)
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new Error('aborted'));
+        });
+      });
+    return Promise.resolve(new Response('ok'));
+  };
+  const res = await retryingFetch(fetchFn, { timeoutMs: 20, sleep: () => Promise.resolve() })('https://x.test');
+  assert.equal(await res.text(), 'ok');
+  assert.equal(calls, 2);
+});

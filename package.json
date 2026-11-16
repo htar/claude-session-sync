@@ -46,52 +46,52 @@
     "commands": [
       {
         "command": "claudeSessionSync.push",
-        "title": "Push sessions",
+        "title": "%command.push.title%",
         "category": "Claude Sync"
       },
       {
         "command": "claudeSessionSync.pull",
-        "title": "Pull sessions",
+        "title": "%command.pull.title%",
         "category": "Claude Sync"
       },
       {
         "command": "claudeSessionSync.chooseMode",
-        "title": "Choose sync method",
+        "title": "%command.chooseMode.title%",
         "category": "Claude Sync"
       },
       {
         "command": "claudeSessionSync.deleteExport",
-        "title": "Delete exported sessions",
+        "title": "%command.deleteExport.title%",
         "category": "Claude Sync"
       },
       {
         "command": "claudeSessionSync.manage",
-        "title": "Manage connection (change method, disconnect)",
+        "title": "%command.manage.title%",
         "category": "Claude Sync"
       },
       {
         "command": "claudeSessionSync.enableEncryption",
-        "title": "Turn on encryption",
+        "title": "%command.enableEncryption.title%",
         "category": "Claude Sync"
       },
       {
         "command": "claudeSessionSync.showLog",
-        "title": "Show log",
+        "title": "%command.showLog.title%",
         "category": "Claude Sync"
       },
       {
         "command": "claudeSessionSync.disconnect",
-        "title": "Disconnect storage",
+        "title": "%command.disconnect.title%",
         "category": "Claude Sync"
       },
       {
         "command": "claudeSessionSync.resume",
-        "title": "Resume a session",
+        "title": "%command.resume.title%",
         "category": "Claude Sync"
       }
     ],
     "configuration": {
-      "title": "Session Sync for Claude Code",
+      "title": "%configuration.title%",
       "properties": {
         "claudeSessionSync.mode": {
           "type": "string",
@@ -105,41 +105,41 @@
             "git"
           ],
           "enumDescriptions": [
-            "Ask on first use.",
-            "Sign in with GitHub; a private claude-sessions repository is created automatically.",
-            "Dropbox, signed in directly in the browser (no Dropbox app needed).",
-            "OneDrive, signed in directly in the browser (no OneDrive app needed).",
-            "Google Drive, signed in directly in the browser (no Google Drive app needed).",
-            "A folder kept in sync by a storage's own app: iCloud Drive, Google Drive, MEGA, pCloud, Box, Proton Drive, Nextcloud…",
-            "Your own private git repository (claudeSessionSync.repoUrl)."
+            "%config.mode.enum0%",
+            "%config.mode.enum1%",
+            "%config.mode.enum2%",
+            "%config.mode.enum3%",
+            "%config.mode.enum4%",
+            "%config.mode.enum5%",
+            "%config.mode.enum6%"
           ],
           "default": "",
           "scope": "machine",
-          "markdownDescription": "How sessions travel between devices. Use **Claude Sync: Choose sync method** to change it."
+          "markdownDescription": "%config.mode.description%"
         },
         "claudeSessionSync.syncFolder": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Cloud-storage method: the folder that holds the sessions. Filled in when you pick a storage on first use; you can also set any synced folder by hand."
+          "markdownDescription": "%config.syncFolder.description%"
         },
         "claudeSessionSync.deviceName": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Name of this device in the storage: its sessions are exported to their own folder under this name, and other devices choose it when importing. Empty = the computer's host name."
+          "markdownDescription": "%config.deviceName.description%"
         },
         "claudeSessionSync.repoUrl": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Own-git method: URL of a **private** git repository that stores the transcripts (`https://…`, `ssh://…` or `git@host:owner/repo.git`)."
+          "markdownDescription": "%config.repoUrl.description%"
         },
         "claudeSessionSync.claudeDir": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Claude config directory. Empty = `~/.claude`."
+          "markdownDescription": "%config.claudeDir.description%"
         },
         "claudeSessionSync.maxFileSizeMB": {
           "type": "number",
@@ -147,26 +147,26 @@
           "minimum": 1,
           "maximum": 95,
           "scope": "machine",
-          "markdownDescription": "Sessions bigger than this are **not pushed** (and are reported). GitHub rejects any file over 100 MB, and one such file fails the whole push."
+          "markdownDescription": "%config.maxFileSizeMB.description%"
         },
         "claudeSessionSync.maxSessionAgeDays": {
           "type": "integer",
           "default": 30,
           "minimum": 0,
           "scope": "machine",
-          "markdownDescription": "Push only sessions modified within this many days. `0` = no limit. A pull always takes everything the repository holds."
+          "markdownDescription": "%config.maxSessionAgeDays.description%"
         },
         "claudeSessionSync.scanSecrets": {
           "type": "boolean",
           "default": true,
           "scope": "machine",
-          "markdownDescription": "Before a push, look for API keys, tokens and private keys in the sessions about to be sent, and ask whether to leave those sessions out."
+          "markdownDescription": "%config.scanSecrets.description%"
         },
         "claudeSessionSync.projectKey": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "The same value on every device matches a project that has no git remote (or different remotes). Empty = the git remote, otherwise the folder name."
+          "markdownDescription": "%config.projectKey.description%"
         }
       }
     }

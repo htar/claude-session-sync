@@ -29,6 +29,7 @@
 - **离开设备前先 Push，在另一台设备开始前先 Pull。**
 - 不要在两台设备上同时继续同一个会话：扩展会提示冲突，并且不会覆盖任何内容。
 - 拉取的会话可能不会立刻出现在 Claude Code 的会话列表中。请重新加载窗口（**Developer: Reload Window**），或使用 **Claude Sync: Resume a session** 直接打开它。
+- 当 Claude Code 侧边栏的 **Active** 过滤器（列表上方的 ⚡ «Active · 0» 按钮）开启时，拉取的会话会被隐藏：此时只显示打开中、运行中或等待你回复的会话。关闭它即可看到项目的全部会话。
 - 云服务不会立即送达文件：如果 Pull 没有找到内容，请等一分钟再试。
 - 每台设备导出到各自的文件夹（以设备命名，见 `claudeSessionSync.deviceName`），因此设备之间不会互相覆盖，来源由你自己选择。
 - 删除某台设备导出的内容：**Claude Sync: Delete exported sessions**（会要求确认；你设备上的会话不会被触及）。

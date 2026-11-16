@@ -30,6 +30,7 @@ Los comandos están en la Paleta de comandos: **Cmd+Shift+P** (Windows y Linux: 
 - **Haz Push antes de dejar un dispositivo y Pull antes de empezar en otro.**
 - No continúes una misma sesión en dos dispositivos a la vez: la extensión avisa del conflicto y no sobrescribe nada.
 - Una sesión traída puede no aparecer enseguida en la lista de sesiones de Claude Code. Recarga la ventana (**Developer: Reload Window**) o usa **Claude Sync: Resume a session**, que la abre directamente.
+- La barra lateral de Claude Code oculta las sesiones traídas mientras su filtro **Active** (el botón ⚡ «Active · 0» sobre la lista) está activado: entonces solo muestra las sesiones abiertas, en ejecución o que esperan tu respuesta. Desactívalo para ver todas las sesiones del proyecto.
 - Un servicio en la nube no entrega los archivos al instante: si Pull no encuentra nada, espera un minuto e inténtalo de nuevo.
 - Cada dispositivo exporta a su propia carpeta (con el nombre del dispositivo, ver `claudeSessionSync.deviceName`), así que no se sobrescriben entre sí y tú eliges el origen.
 - Elimina lo que exportó un dispositivo: **Claude Sync: Delete exported sessions** (pide confirmación; tus sesiones en tus dispositivos no se tocan).

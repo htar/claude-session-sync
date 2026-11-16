@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0
+
+- First stable release: GitHub, iCloud Drive, Dropbox, OneDrive, Google Drive and any cloud folder as storage; encryption; choosing sessions to push; Ukrainian, Spanish and Chinese translations.
+- README: the Claude Code sidebar hides pulled sessions while its **Active** filter is on; turn it off to see them.
+
 ## 0.15.1
 
 - The pull also marks sessions that were already on this computer (pulled by an older version, or resumed here since), not only the ones it has just copied.

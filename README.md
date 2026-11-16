@@ -30,6 +30,7 @@ Commands live in the Command Palette: **Cmd+Shift+P** (Windows and Linux: Ctrl+S
 - **Push before you leave a device, Pull before you start on another.**
 - Do not continue one session on two devices at once: the extension reports a conflict and overwrites nothing.
 - A pulled session may not show up in the Claude Code session list right away. Reload the window (**Developer: Reload Window**), or use **Claude Sync: Resume a session**, which opens it directly.
+- The Claude Code sidebar hides pulled sessions while its **Active** filter (the ⚡ «Active · 0» button above the list) is on: it then shows only sessions that are open, running or waiting for you. Turn it off to see every session of the project.
 - A cloud service does not deliver files instantly: if Pull finds nothing, wait a minute and try again.
 - Every device exports to its own folder (named after the device, see `claudeSessionSync.deviceName`), so devices never overwrite each other and you always pick the source yourself.
 - Remove what a device exported: **Claude Sync: Delete exported sessions** (asks for confirmation; your own sessions on your devices are never touched).

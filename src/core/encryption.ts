@@ -97,11 +97,11 @@ function walk(dir: string, base = ''): string[] {
 
 const abs = (root: string, rel: string): string => path.join(root, ...rel.split('/'));
 
-function writeAtomic(file: string, data: Buffer): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+async function writeAtomicAsync(file: string, data: Buffer): Promise<void> {
+  await fs.promises.mkdir(path.dirname(file), { recursive: true });
   const tmp = path.join(path.dirname(file), `.${path.basename(file)}.tmp-${process.pid}`);
-  fs.writeFileSync(tmp, data);
-  fs.renameSync(tmp, file);
+  await fs.promises.writeFile(tmp, data);
+  await fs.promises.rename(tmp, file);
 }
 
 function removeEmptyDirs(dir: string, isRoot = true): void {
@@ -150,7 +150,7 @@ export class EncryptingTransport implements Transport {
       if (!key) throw new Error('The storage is encrypted, and no passphrase was given.');
       this.key = key;
     }
-    this.decryptAll();
+    await this.decryptAll();
   }
 
   /**
@@ -180,11 +180,11 @@ export class EncryptingTransport implements Transport {
     const plain = new Set(walk(this.plainRoot));
     let changed = 0;
     for (const rel of plain) {
-      const data = fs.readFileSync(abs(this.plainRoot, rel));
+      const data = await fs.promises.readFile(abs(this.plainRoot, rel));
       const hash = sha1(data);
       if (this.synced.get(rel) === hash) continue;
       const cipher = encrypt(key, data);
-      writeAtomic(abs(this.inner.root, rel + SUFFIX), cipher);
+      await writeAtomicAsync(abs(this.inner.root, rel + SUFFIX), cipher);
       this.synced.set(rel, hash);
       this.cipherSeen.set(rel, sha1(cipher));
       changed++;
@@ -201,7 +201,7 @@ export class EncryptingTransport implements Transport {
   }
 
   /** Makes the plain cache equal to the store's `.enc` files; unchanged files are not decrypted again. */
-  private decryptAll(): void {
+  private async decryptAll(): Promise<void> {
     const key = this.key;
     if (!key) return;
     const inStore = new Set(
@@ -212,7 +212,7 @@ export class EncryptingTransport implements Transport {
     const next = new Map<string, string>();
     const seen = new Map<string, string>();
     for (const rel of inStore) {
-      const cipher = fs.readFileSync(abs(this.inner.root, rel + SUFFIX));
+      const cipher = await fs.promises.readFile(abs(this.inner.root, rel + SUFFIX));
       const cipherHash = sha1(cipher);
       seen.set(rel, cipherHash);
       const target = abs(this.plainRoot, rel);
@@ -222,7 +222,7 @@ export class EncryptingTransport implements Transport {
         continue;
       }
       const data = decrypt(key, cipher);
-      writeAtomic(target, data);
+      await writeAtomicAsync(target, data);
       next.set(rel, sha1(data));
     }
     this.cipherSeen = seen;

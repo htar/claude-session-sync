@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.0
+
+- Session transcripts are stored gzip-compressed in Dropbox, OneDrive and Google Drive, and compressed before encryption (typically about half the size). Older files are still read and are replaced by compressed ones on the next push.
+- Messages, dialogs and progress titles of the extension are translated (Ukrainian, Spanish, Chinese).
+
 ## 0.12.0
 
 - **Cancel** on the progress notification stops the running push or pull (the network requests are aborted).

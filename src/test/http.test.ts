@@ -101,3 +101,17 @@ test('a request that never answers is given up and retried instead of hanging', 
   assert.equal(await res.text(), 'ok');
   assert.equal(calls, 2);
 });
+
+test('a request cancelled by the caller is not retried', async () => {
+  let calls = 0;
+  const controller = new AbortController();
+  const fetchFn: FetchFn = () => {
+    calls++;
+    controller.abort();
+    return Promise.reject(new Error('aborted'));
+  };
+  await assert.rejects(
+    retryingFetch(fetchFn, { sleep: () => Promise.resolve() })('https://x.test', { signal: controller.signal }),
+  );
+  assert.equal(calls, 1);
+});

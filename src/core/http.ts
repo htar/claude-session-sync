@@ -66,7 +66,7 @@ export function retryingFetch(fetchFn: FetchFn, opts: RetryOptions = {}): FetchF
         if (!RETRY_STATUS.has(res.status) || attempt >= retries) return res;
         await sleep(retryAfterMs(res) ?? backoff);
       } catch (e) {
-        if (attempt >= retries) throw e;
+        if (attempt >= retries || init?.signal?.aborted) throw e;
         await sleep(backoff);
       }
     }

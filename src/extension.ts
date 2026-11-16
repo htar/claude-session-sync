@@ -55,6 +55,16 @@ function installIdOf(context: vscode.ExtensionContext): string {
 /** Thrown by a command's body to run the whole command again (after the user changed a setting it depends on). */
 class RetryCommand extends Error {}
 
+/** The user pressed Cancel on a progress notification. */
+class OperationCancelled extends Error {}
+
+/** Cancels the network requests of the operation that is running now (set by `progress`). */
+let activeAbort: AbortController | undefined;
+
+/** `fetch` that stops when the running operation is cancelled. */
+const cancellableFetch: typeof fetch = (input, init) =>
+  fetch(input, activeAbort ? { ...init, signal: init?.signal ?? activeAbort.signal } : init);
+
 /** Local copies the extension keeps per method, inside its own storage folder. Removed on «Disconnect». */
 const CACHE_DIR: Record<Mode, string | undefined> = {
   github: 'github-repo',
@@ -228,7 +238,7 @@ async function saveToken(context: vscode.ExtensionContext, cloud: CloudProvider,
 }
 
 async function cloudTransport(context: vscode.ExtensionContext, cloud: CloudProvider): Promise<Transport | undefined> {
-  const http = retryingFetch(fetch);
+  const http = retryingFetch(cancellableFetch);
   let refresh = await context.secrets.get(tokenKey(cloud)).then(
     (t) => t,
     () => undefined,
@@ -596,16 +606,28 @@ async function chooseSessionsToPull(service: SyncService, from: string): Promise
 }
 
 const progress = <T>(title: string, task: () => Promise<T>) =>
-  vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title }, async (p) => {
-    currentStep = (message) => {
-      p.report({ message });
-    };
-    try {
-      return await task();
-    } finally {
-      currentStep = undefined;
-    }
-  });
+  vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title, cancellable: true },
+    async (p, token) => {
+      const abort = new AbortController();
+      activeAbort = abort;
+      token.onCancellationRequested(() => {
+        abort.abort();
+      });
+      currentStep = (message) => {
+        p.report({ message });
+      };
+      try {
+        return await task();
+      } catch (e) {
+        if (abort.signal.aborted) throw new OperationCancelled();
+        throw e;
+      } finally {
+        currentStep = undefined;
+        if (activeAbort === abort) activeAbort = undefined;
+      }
+    },
+  );
 
 /** The `claude` binary inside the installed Claude Code extension, if there is one; `why` says what was looked at. */
 function bundledClaude(log: Logger): string | undefined {
@@ -725,6 +747,13 @@ export function activate(context: vscode.ExtensionContext): void {
             return;
           } catch (e) {
             if (e instanceof RetryCommand) continue;
+            if (e instanceof OperationCancelled) {
+              log.info('Cancelled by the user.');
+              void vscode.window.showInformationMessage(
+                'Claude Sync: cancelled. Nothing was lost; run it again any time.',
+              );
+              return;
+            }
             const message = redactSecrets(e instanceof Error ? e.message : String(e));
             log.error(message);
             if (!reconnected && isAccessError(message)) {

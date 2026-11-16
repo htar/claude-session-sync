@@ -44,6 +44,7 @@ interface DriveFile {
   name: string;
   /** Google sends sizes as strings. */
   size?: string;
+  md5Checksum?: string;
 }
 
 /**
@@ -86,7 +87,7 @@ export class GoogleDriveClient implements RemoteStore {
     do {
       const q = new URLSearchParams({
         spaces: 'appDataFolder',
-        fields: 'nextPageToken,files(id,name,size)',
+        fields: 'nextPageToken,files(id,name,size,md5Checksum)',
         pageSize: '1000',
         orderBy: 'modifiedTime desc',
       });
@@ -98,7 +99,11 @@ export class GoogleDriveClient implements RemoteStore {
         // Two files with one name can exist: the newest wins (the list is newest first).
         if (ids.has(f.name)) continue;
         ids.set(f.name, f.id);
-        files.push({ rel: f.name, size: Number(f.size ?? 0) });
+        files.push({
+          rel: f.name,
+          size: Number(f.size ?? 0),
+          ...(f.md5Checksum ? { revision: f.md5Checksum } : {}),
+        });
       }
       pageToken = page.nextPageToken;
     } while (pageToken);

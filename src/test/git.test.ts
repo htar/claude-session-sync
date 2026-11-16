@@ -11,6 +11,9 @@ test('accepts https, ssh, scp-style and absolute paths', () => {
     'ssh://git@host/o/r.git',
     'git@github.com:o/r.git',
     '/tmp/remote.git',
+    'C:\\tmp\\remote.git',
+    'C:/tmp/remote.git',
+    '\\\\server\\share\\remote.git',
   ]) {
     assert.equal(isValidRepoUrl(u), true, u);
   }

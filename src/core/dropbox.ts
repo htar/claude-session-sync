@@ -65,12 +65,17 @@ export class DropboxClient implements RemoteStore {
     for (;;) {
       if (!res.ok) throw await this.failure('listing', res);
       const page = (await res.json()) as {
-        entries: { '.tag': string; path_display: string; size?: number }[];
+        entries: { '.tag': string; path_display: string; size?: number; content_hash?: string }[];
         has_more: boolean;
         cursor: string;
       };
       for (const e of page.entries)
-        if (e['.tag'] === 'file') files.push({ rel: e.path_display.replace(/^\//, ''), size: e.size ?? 0 });
+        if (e['.tag'] === 'file')
+          files.push({
+            rel: e.path_display.replace(/^\//, ''),
+            size: e.size ?? 0,
+            ...(e.content_hash ? { revision: e.content_hash } : {}),
+          });
       if (!page.has_more) return files;
       res = await this.rpc('files/list_folder/continue', { cursor: page.cursor });
     }

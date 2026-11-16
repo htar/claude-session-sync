@@ -847,7 +847,10 @@ test('MirrorTransport: traversal names, empty segments and absolute-looking name
   const root = path.join(parent, 'cache');
   await new MirrorTransport(root, store).refresh();
   assert.deepEqual(fs.readdirSync(parent), ['cache']);
-  assert.deepEqual(fs.readdirSync(root), ['ok.jsonl']);
+  assert.deepEqual(
+    fs.readdirSync(root).filter((name) => !name.startsWith('.')),
+    ['ok.jsonl'],
+  );
 });
 
 test('MirrorTransport: publish uploads new/changed files, removes deleted ones, and a second publish is a no-op', async () => {
@@ -911,6 +914,24 @@ test('MirrorTransport.publish uploads an edit that keeps the byte length', async
   fs.writeFileSync(path.join(root, 'a.jsonl'), 'bbbb');
   await (m as Transport).publish('m', 1);
   assert.equal(store.files.get('a.jsonl')?.toString(), 'bbbb');
+});
+
+test('MirrorTransport refresh downloads a same-size remote revision after a restart', async () => {
+  const files = new Map([['device.json', Buffer.from('one')]]);
+  let revision = '1';
+  const store: RemoteStore = {
+    list: () => Promise.resolve([{ rel: 'device.json', size: 3, revision }]),
+    download: (rel) => Promise.resolve(files.get(rel) ?? Buffer.alloc(0)),
+    upload: () => Promise.resolve(),
+    remove: () => Promise.resolve(),
+  };
+  const root = tmp();
+  await new MirrorTransport(root, store).refresh();
+  assert.equal(read(root, 'device.json'), 'one');
+  files.set('device.json', Buffer.from('two'));
+  revision = '2';
+  await new MirrorTransport(root, store).refresh();
+  assert.equal(read(root, 'device.json'), 'two');
 });
 
 // ---------------------------------------------------------------- dropbox / onedrive clients
@@ -1591,18 +1612,24 @@ test('tokenProvider: fresh skips the cached access token', async () => {
   assert.equal(await token({ fresh: true }), 'T2');
 });
 
-test('listSessions leaves out sub-agent logs; copyTranscripts reports a file it cannot read and copies the rest', async () => {
-  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'css-agent-'));
-  const dst = fs.mkdtempSync(path.join(os.tmpdir(), 'css-agent-dst-'));
-  const line = '{"type":"user","message":{"content":"hi"}}\n';
-  fs.writeFileSync(path.join(src, 'agent-abc123.jsonl'), line);
-  fs.writeFileSync(path.join(src, 'good.jsonl'), line);
-  fs.symlinkSync(path.join(src, 'missing'), path.join(src, 'broken.jsonl'));
-  assert.deepEqual(
-    listSessions(src).map((s) => s.id),
-    ['good'],
-  );
-  const result = await copyTranscripts(src, dst);
-  assert.deepEqual(result.failed, ['broken.jsonl']);
-  assert.ok(result.copied.includes('good.jsonl'));
-});
+test(
+  'listSessions leaves out sub-agent logs; copyTranscripts reports a file it cannot read and copies the rest',
+  {
+    skip: process.platform === 'win32' ? 'creating symlinks requires an optional Windows privilege' : false,
+  },
+  async () => {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), 'css-agent-'));
+    const dst = fs.mkdtempSync(path.join(os.tmpdir(), 'css-agent-dst-'));
+    const line = '{"type":"user","message":{"content":"hi"}}\n';
+    fs.writeFileSync(path.join(src, 'agent-abc123.jsonl'), line);
+    fs.writeFileSync(path.join(src, 'good.jsonl'), line);
+    fs.symlinkSync(path.join(src, 'missing'), path.join(src, 'broken.jsonl'));
+    assert.deepEqual(
+      listSessions(src).map((s) => s.id),
+      ['good'],
+    );
+    const result = await copyTranscripts(src, dst);
+    assert.deepEqual(result.failed, ['broken.jsonl']);
+    assert.ok(result.copied.includes('good.jsonl'));
+  },
+);

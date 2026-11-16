@@ -39,6 +39,7 @@ interface Item {
   name: string;
   size?: number;
   folder?: unknown;
+  eTag?: string;
 }
 interface Page {
   value: Item[];
@@ -84,7 +85,7 @@ export class OneDriveClient implements RemoteStore {
       for (const item of page.value) {
         const childRel = rel ? `${rel}/${item.name}` : item.name;
         if (item.folder) await this.walk(childRel, out);
-        else out.push({ rel: childRel, size: item.size ?? 0 });
+        else out.push({ rel: childRel, size: item.size ?? 0, ...(item.eTag ? { revision: item.eTag } : {}) });
       }
       url = page['@odata.nextLink'];
     }

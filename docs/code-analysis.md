@@ -6,6 +6,7 @@
 ## 1. Реальні баги
 
 ### 1.1 HIGH. Невдалий git push ніколи не доштовхується (src/core/git.ts:74-79, syncService.ts:85-109)
+
 `commitAndPush` повертає `false`, якщо `git status --porcelain` порожній, і не перевіряє непушені коміти.
 Сценарій: коміт створено, `git push` упав (мережа, гонка з іншим пристроєм). Повторна спроба (цикл у push, attempt 2)
 робить `refresh` (pull --rebase), `copyTranscripts` нічого нового не копіює, status чистий, повертається `false`.
@@ -15,6 +16,7 @@ UI каже «nothing new to push», хоч віддалений репозит�
 якщо upstream немає, пушити, коли є коміти. Додати тест із фейковим remote, що відхиляє перший push.
 
 ### 1.2 HIGH. Застарілий знімок конфігурації після `cfg.update` (extension.ts:524-526, 688-697, 137-158)
+
 `WorkspaceConfiguration` є знімком [перевірити]. У `reconnect` (folder): `cfg.update('syncFolder','')`, далі `folderTransport(cfg)`
 читає `cfg.get('syncFolder')` зі старого знімка, тож повертає `FolderTransport(старий шлях)` без запиту.
 Кнопка «Choose the storage again» нічого не робить, повтор падає з тією ж помилкою.
@@ -23,21 +25,25 @@ UI каже «nothing new to push», хоч віддалений репозит�
 Виправлення: після update брати `vscode.workspace.getConfiguration(SECTION)` заново, або передавати в `folderTransport` явний параметр `reset`.
 
 ### 1.3 MEDIUM. `chooseMode` зберігає метод ДО налаштування (extension.ts:154-156, 695)
+
 Користувач обирає Dropbox, скасовує вхід у браузері: `mode='dropbox'` уже записано, `syncFolder` стерто, попередній метод втрачено,
 статус-бар показує «Dropbox», хоча нічого не підключено. Те саме для `git` без `repoUrl` (повідомлення «now using your git repository»).
 Виправлення: записувати mode лише після успішного `cloudTransport/folderTransport`; або відкочувати до попереднього значення.
 
 ### 1.4 MEDIUM. «Resume» тягне весь транспорт (extension.ts:758-776, 573-586)
+
 Команда `resume` проходить `openSession`, тобто `githubTransport` (getSession + 2 HTTP-виклики), `cloudTransport` (вхід), перевірку `repoUrl`,
 хоча потрібні лише локальні файли. Офлайн/без входу Resume дає «cannot reach the storage» або запит входу.
 Якщо `mode` не вибрано, Resume питає метод синхронізації.
 Виправлення: окремий шлях без транспорту (лише `folder`, `claudeDir`, `localDir`).
 
 ### 1.5 MEDIUM. Resume ігнорує `claudeDir` (extension.ts:773-775)
+
 Терміналу не передається `CLAUDE_CONFIG_DIR`, коли задано `claudeDir`; `claude --resume <id>` шукає в `~/.claude`: «No conversation found».
 Виправлення: `createTerminal({ env: { CLAUDE_CONFIG_DIR: ... } })`, коли `claudeDir` непорожній.
 
 ### 1.6 MEDIUM. Блокування «одна операція» не працює між командами (syncService.ts:65-68, 215-219; extension.ts:556-610)
+
 `SyncService.exclusive` черга живе в екземплярі, а `openSession` створює новий `SyncService` на кожну команду, тож черга нічого не захищає.
 Залишається `busySince` у `command()` зі staleness 10 хв: довгий upload (>10 хв) або діалог без відповіді дозволяє другу операцію
 паралельно у тому ж кеші (git index corruption, на що посилається коментар). `disconnect`, `chooseMode`, `manage` не перевіряють lock:
@@ -45,6 +51,7 @@ UI каже «nothing new to push», хоч віддалений репозит�
 Виправлення: один модульний/глобальний mutex (SyncService-синглтон на кеш-директорію), без таймауту-«stale», а з відстеженням живого promise; disconnect теж чекає.
 
 ### 1.7 MEDIUM. Збереження `takeOver` не потрапляє у Dropbox/OneDrive (remote.ts:89, syncService.ts:183-200)
+
 `MirrorTransport.publish` вирішує про upload лише за розміром. `device.json` = `{"id":<uuid>,"name":...}` має однакову довжину для будь-якого uuid,
 тому перезаписаний маркер після «This is the same computer» не завантажується. Після очищення кешу (Disconnect) старий маркер
 знову стягується, і конфлікт імені повторюється; старий комп'ютер лишається власником. Також refresh порівнює лише розмір:
@@ -52,52 +59,63 @@ UI каже «nothing new to push», хоч віддалений репозит�
 Виправлення: порівнювати також content_hash (Dropbox) / hash (OneDrive `file.hashes`) або mtime, або для маркера додати лічильник/timestamp (змінює розмір).
 
 ### 1.8 MEDIUM. Нестабільна ідентичність пристрою за замовчуванням (extension.ts:342)
+
 `os.hostname()` на macOS змінюється з мережею («MacBook-Pro.local», «MacBook-Pro-2.local», «.lan»). Новий хост дає нову папку `devices/<name>`
 без клешу (різний `name`, той самий installId): експорти осиротіють, у списку пристроїв з'являться дублі.
 Загальні імена («MacBook-Pro») на двох машинах дають клеш. Нелатинська назва хоста стає `device` (devices.ts:13-21), тож дві такі машини зіткнуться.
 Виправлення: на першому використанні згенерувати й зберегти ім'я (hostname + короткий installId) у globalState/налаштуванні; не вирізати нелатиницю в `device`, а транслітерувати або додавати суфікс installId.
 
 ### 1.9 MEDIUM. OAuth-колбек: будь-який запит із невірним state перериває вхід (oauth.ts:122-135)
+
 Достатньо одного запиту на `http://127.0.0.1:53682/callback` без/з чужим `state` (інша вкладка, локальний процес, сканер), і `finish(CloudAuthError)`
 закриває сервер: вхід скасовано (DoS). Виправлення: на невірний state відповідати 400 і продовжувати чекати, завершувати лише на валідний state або на `error=` із коректним state.
 Також `server.close()` не розриває keep-alive з'єднання: порт лишається зайнятим кілька секунд, повторний вхід дає EADDRINUSE; використати `closeAllConnections()` (Node 18.2+).
 Фіксовані порти 53682/53683 ламаються при двох вікнах VS Code; Dropbox вимагає зареєстрований redirect, тож порт змінити не можна, але повідомлення можна зробити зрозумілішим.
 
 ### 1.10 MEDIUM. 401 від API трактується як «вийшов з акаунта» без спроби оновити токен (dropbox.ts:43, onedrive.ts:59, oauth.ts:90-99)
+
 `CloudAuthError` кидається одразу; закешований access-token міг застаріти раніше за `expires_in` (різниця годинників, відкликання). Користувачу пропонується «Sign in again» і видаляється refresh-token (extension.ts:538-541),
 хоча достатньо інвалідувати кеш і повторити запит один раз. Виправлення: `tokenProvider.invalidate()` і один retry при 401.
 
 ### 1.11 MEDIUM. Помилки git можуть містити облікові дані з `repoUrl` (git.ts:14, 41, 44; extension.ts:591-602, 166)
+
 `REPO_URL` дозволяє `https://user:token@host/...`. Повідомлення `execFile` («Command failed: git clone -- https://user:token@...») іде в Output-канал (`log.error`) і в toast; `describeMethod` теж показує `repoUrl` у повідомленнях. Також URL з токеном потрапляє у `.git/config`.
 Виправлення: відхиляти URL з userinfo (`user:pass@` для https), маскувати `://[^@/]+@` у `log`/toast.
 
 ### 1.12 MEDIUM. Переоформлена помилка автентифікації git як «мережа» (errors.ts:4, extension.ts:101-104, 597)
+
 `isAccessError` не ловить `fatal: unable to access '...': The requested URL returned error: 403` (формат git), а `classifyError` бачить `unable to access` і каже «cannot reach the storage, check internet». Протухлий/недостатній токен подається як проблема мережі.
 `permission denied` у `isAccessError` ловить і локальні EACCES (запис у `~/.claude/projects`), пропонуючи «Sign in to GitHub». `sign.?in` матчить майже будь-що.
 Виправлення: типізовані помилки (CloudAuthError, GitAuthError з exit-code/stderr-аналізу), а не регекси по тексту.
 
 ### 1.13 MEDIUM. Rebase-конфлікт назавжди ламає git-кеш (git.ts:53-56)
+
 `pull --rebase --autostash` при конфлікті лишає репозиторій у стані rebase; усі наступні операції падають. Автовідновлення немає.
 Також зміна `repoUrl`/GitHub-акаунта виконує лише `remote set-url` (git.ts:47-49) на вже існуючому клоні з іншою історією: `pull --rebase` на непов'язаній історії.
 Виправлення: при помилці pull робити `rebase --abort` + `reset --hard origin/<branch>` (кеш одноразовий, дані локальних сесій не страждають), при зміні URL перестворювати клон.
 Пов'язано: порожній/частково клонований каталог `.git` після обриву clone (git.ts:42) лишає зламаний кеш.
 
 ### 1.14 MEDIUM. Windows: регістр літери диска й довгі шляхи (paths.ts:5, extension.ts:320, 336)
+
 `uri.fsPath` у VS Code на Windows повертає літеру диска в нижньому регістрі (`c:\...`), Claude Code кодує cwd як `C--...`. NTFS регістро-нечутлива, тож папка знайдеться, але створення `c--...` vs `C--...` на інших ФС/WSL розходиться. Також Claude Code для дуже довгих шляхів скорочує ім'я з хешем [перевірити], `encodeProjectDir` цього не робить.
 Виправлення: нормалізувати літеру диска до верхнього регістру; звіряти з наявними каталогами в `projects/` (шукати існуючий за case-insensitive збігом).
 
 ### 1.15 LOW-MEDIUM. Усі `.jsonl` у каталозі проєкту вважаються сесіями (transcripts.ts:5, 206-221)
+
 Regex `^[0-9a-zA-Z-]+\.jsonl$` пропускає `agent-xxxx.jsonl` (субагенти): вони експортуються й потрапляють у вибір як «(no prompt)»; `claude --resume agent-...` не працює. Також не синхронізуються пов'язані підкаталоги `<session-id>/` (tool-results, subagents) [перевірити для актуальних версій Claude Code], тож відновлена сесія може втратити частину контексту.
 Виправлення: фільтрувати за UUID-шаблоном; задокументувати обмеження.
 
 ### 1.16 LOW-MEDIUM. Одна збійна операція файлу зриває весь push/pull (transcripts.ts:71-98, remote.ts:60-83)
+
 Немає try/catch на файл: EBUSY/EPERM (Windows, відкритий файл), EACCES, зламаний symlink (`statSync`) переривають цикл, лишають tmp-файл `.x.tmp-<pid>`; hidden tmp ніколи не прибираються (walk пропускає hidden, `pruneEmptyDirs` не видалить каталог).
 Виправлення: ізолювати помилки по файлах (збирати у `failed[]`), чистити tmp на старті refresh.
 
 ### 1.17 LOW. `isPrefix` не обробляє короткі читання (transcripts.ts:46-50)
+
 `fs.readSync` може повернути менше байтів (мережеві/хмарні файлові системи); порівняння використовує `len`, тож хибний `conflict`. Виправлення: цикл читання до `len`.
 
 ### 1.18 LOW. Інші дрібні
+
 - Dropbox `remove`: усі 409 вважаються «вже видалено» (dropbox.ts:96), приховує реальні помилки; розбирати `error_summary` (`path_lookup/not_found`).
 - OneDrive: chunk-upload не обробляє 416/повтор із запитом `nextExpectedRanges` (onedrive.ts:112-121).
 - `retryingFetch` повторює й `AbortError`; немає загального timeout для fetch (зависання на мертвому з'єднанні назавжди; прогрес не скасовується: `cancellable` не виставлено в `progress`, extension.ts:485).
@@ -121,22 +139,22 @@ Regex `^[0-9a-zA-Z-]+\.jsonl$` пропускає `agent-xxxx.jsonl` (субаг
 
 ## 3. Мертвий код і розбіжності
 
-| Місце | Що |
-|---|---|
-| extension.ts:648 | Команда `claudeSessionSync.showLog` зареєстрована, але відсутня в `package.json contributes.commands`: недоступна з палітри; доступна лише з кнопок. README про неї мовчить. |
-| package.json `activationEvents: []` | Розширення активується лише після першої команди; статус-бар (extension.ts:633-640) і README («Click Claude Sync in the status bar») з'являються тільки після неї. Додати `onStartupFinished`. |
-| README «Settings» | `mode` описано як «github, folder, git»: немає dropbox/onedrive; відсутні `syncFolder` і `claudeDir` (є в package.json). |
-| README/Security | Не згадано, що Dropbox/OneDrive-токени зберігаються у secret storage і що `Disconnect` видаляє їх (згадано в CHANGELOG 0.6.0). |
-| transcripts.ts:26,93 `CopyResult.skipped` | Заповнюється, у коді розширення не використовується (лише тест). Можна лишити як метрику у логах. |
-| syncService.ts:151 `removeDevice().published` | Повертається, ніде не читається. |
-| transport.ts FolderTransport.publish | `copied>0` як «pushed» відрізняється від git/Mirror (реальна зміна): `report` каже різне для різних методів (для git `pushed=false` може бути при copied>0, див. 1.1). |
-| extension.ts:134 vs 66 | `isMode` і тип `Mode` дублюють перелік; `CACHE_DIR` дублює імена каталогів, що створюються в `githubTransport`(`'github-repo'`), `gitTransport`(`'repo'`), `cloudTransport`(`${id}-cache`) рядковими літералами в трьох місцях. Винести константу. |
-| oauth.ts ↔ remote.ts | `CloudAuthError` оголошено в `remote.ts`, а імпортується з oauth.ts та клієнтів (шар перемішано). Винести в `errors.ts`. |
-| errors.ts / extension.ts:101 | Дві паралельні системи класифікації помилок на регексах. |
-| Dropbox/OneDrive | Код дублює `call/failure/401-обробку`; можна винести базовий клас. |
-| extension.ts 780 рядків | Усе в одному файлі: UI-flow, транспорти, reconnect. Розбити на модулі. |
-| Mode `github` vs `git` | Різні каталоги кешу, різна обробка помилок/реconnect, тоді як `GitTransport` той самий. |
-| package.json | `mode` enum містить `""`, прийнятно. `description` називає Google Drive, але це лише через «Cloud folder» (узгоджено з README). |
+| Місце                                         | Що                                                                                                                                                                                                                                                 |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| extension.ts:648                              | Команда `claudeSessionSync.showLog` зареєстрована, але відсутня в `package.json contributes.commands`: недоступна з палітри; доступна лише з кнопок. README про неї мовчить.                                                                       |
+| package.json `activationEvents: []`           | Розширення активується лише після першої команди; статус-бар (extension.ts:633-640) і README («Click Claude Sync in the status bar») з'являються тільки після неї. Додати `onStartupFinished`.                                                     |
+| README «Settings»                             | `mode` описано як «github, folder, git»: немає dropbox/onedrive; відсутні `syncFolder` і `claudeDir` (є в package.json).                                                                                                                           |
+| README/Security                               | Не згадано, що Dropbox/OneDrive-токени зберігаються у secret storage і що `Disconnect` видаляє їх (згадано в CHANGELOG 0.6.0).                                                                                                                     |
+| transcripts.ts:26,93 `CopyResult.skipped`     | Заповнюється, у коді розширення не використовується (лише тест). Можна лишити як метрику у логах.                                                                                                                                                  |
+| syncService.ts:151 `removeDevice().published` | Повертається, ніде не читається.                                                                                                                                                                                                                   |
+| transport.ts FolderTransport.publish          | `copied>0` як «pushed» відрізняється від git/Mirror (реальна зміна): `report` каже різне для різних методів (для git `pushed=false` може бути при copied>0, див. 1.1).                                                                             |
+| extension.ts:134 vs 66                        | `isMode` і тип `Mode` дублюють перелік; `CACHE_DIR` дублює імена каталогів, що створюються в `githubTransport`(`'github-repo'`), `gitTransport`(`'repo'`), `cloudTransport`(`${id}-cache`) рядковими літералами в трьох місцях. Винести константу. |
+| oauth.ts ↔ remote.ts                          | `CloudAuthError` оголошено в `remote.ts`, а імпортується з oauth.ts та клієнтів (шар перемішано). Винести в `errors.ts`.                                                                                                                           |
+| errors.ts / extension.ts:101                  | Дві паралельні системи класифікації помилок на регексах.                                                                                                                                                                                           |
+| Dropbox/OneDrive                              | Код дублює `call/failure/401-обробку`; можна винести базовий клас.                                                                                                                                                                                 |
+| extension.ts 780 рядків                       | Усе в одному файлі: UI-flow, транспорти, reconnect. Розбити на модулі.                                                                                                                                                                             |
+| Mode `github` vs `git`                        | Різні каталоги кешу, різна обробка помилок/реconnect, тоді як `GitTransport` той самий.                                                                                                                                                            |
+| package.json                                  | `mode` enum містить `""`, прийнятно. `description` називає Google Drive, але це лише через «Cloud folder» (узгоджено з README).                                                                                                                    |
 
 ## 4. Продуктивність і надійність
 

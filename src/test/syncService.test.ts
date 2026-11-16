@@ -305,12 +305,18 @@ test('removing the last export of a device removes its marker too, and the devic
   assert.deepEqual(await svc.devices(), []);
 });
 
-test('a session that cannot be read is reported as failed and the others are still pushed', async () => {
-  const shared = tmp();
-  const laptop = folderDevice(shared, 'laptop');
-  write(laptop.localDir, 'good.jsonl', userLine('fine'));
-  fs.symlinkSync(path.join(laptop.localDir, 'missing'), path.join(laptop.localDir, 'broken.jsonl'));
-  const result = await laptop.service.push();
-  assert.deepEqual(result.copied, ['good.jsonl']);
-  assert.deepEqual(result.failed, ['broken.jsonl']);
-});
+test(
+  'a session that cannot be read is reported as failed and the others are still pushed',
+  {
+    skip: process.platform === 'win32' ? 'creating symlinks requires an optional Windows privilege' : false,
+  },
+  async () => {
+    const shared = tmp();
+    const laptop = folderDevice(shared, 'laptop');
+    write(laptop.localDir, 'good.jsonl', userLine('fine'));
+    fs.symlinkSync(path.join(laptop.localDir, 'missing'), path.join(laptop.localDir, 'broken.jsonl'));
+    const result = await laptop.service.push();
+    assert.deepEqual(result.copied, ['good.jsonl']);
+    assert.deepEqual(result.failed, ['broken.jsonl']);
+  },
+);

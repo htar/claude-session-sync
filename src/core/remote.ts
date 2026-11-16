@@ -10,6 +10,8 @@ export interface RemoteFile {
   /** Path relative to the app folder, `/`-separated, no leading slash. */
   rel: string;
   size: number;
+  /** Provider content revision/etag, when available. Opaque: only equality is meaningful. */
+  revision?: string;
 }
 
 /** What a cloud service has to offer: a flat list of files under the app's own folder and three file operations. */
@@ -22,6 +24,16 @@ export interface RemoteStore {
 }
 
 const isHidden = (name: string): boolean => name.startsWith('.');
+const STATE_FILE = '.remote-state.json';
+type RemoteState = Record<string, { revision: string; localHash: string }>;
+
+async function readState(root: string): Promise<RemoteState> {
+  try {
+    return JSON.parse(await fs.promises.readFile(path.join(root, STATE_FILE), 'utf8')) as RemoteState;
+  } catch {
+    return {};
+  }
+}
 
 /** Every regular file under `dir`, as `/`-separated paths relative to it; hidden files (tmp copies) are skipped. */
 function walk(dir: string, base = ''): RemoteFile[] {
@@ -80,11 +92,20 @@ export class MirrorTransport implements Transport {
     this.onProgress('Reading the file list…');
     // A name from the network must never lead outside the cache folder.
     const listed = (await this.store.list()).filter((f) => f.rel.split('/').every((p) => p && p !== '.' && p !== '..'));
+    const previous = await readState(this.root);
     this.remote = new Map(listed.map((f) => [f.rel, f.size]));
-    const todo = listed.filter((f) => {
+    const revisions = new Map(listed.map((f) => [f.rel, f.revision]));
+    const todo: RemoteFile[] = [];
+    for (const f of listed) {
       const local = localPath(this.root, f.rel);
-      return !fs.existsSync(local) || fs.statSync(local).size !== f.size;
-    });
+      if (!fs.existsSync(local) || fs.statSync(local).size !== f.size) {
+        todo.push(f);
+        continue;
+      }
+      const old = previous[f.rel];
+      // Keep local edits for publish. Otherwise a changed provider revision means same-size remote content changed.
+      if (f.revision && old && old.revision !== f.revision && (await digest(local)) === old.localHash) todo.push(f);
+    }
     for (const [i, f] of todo.entries()) {
       this.onProgress(`Downloading ${i + 1}/${todo.length}: ${path.basename(f.rel)}`);
       const local = localPath(this.root, f.rel);
@@ -95,11 +116,18 @@ export class MirrorTransport implements Transport {
       await fs.promises.rename(tmp, local);
     }
     this.known.clear();
+    const nextState: RemoteState = {};
     for (const f of walk(this.root)) {
       const file = localPath(this.root, f.rel);
       if (!this.remote.has(f.rel)) fs.rmSync(file);
-      else this.known.set(f.rel, await digest(file));
+      else {
+        const hash = await digest(file);
+        this.known.set(f.rel, hash);
+        const revision = revisions.get(f.rel);
+        if (revision) nextState[f.rel] = { revision, localHash: hash };
+      }
     }
+    await fs.promises.writeFile(path.join(this.root, STATE_FILE), JSON.stringify(nextState));
     pruneEmptyDirs(this.root);
   }
 

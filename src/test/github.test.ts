@@ -72,7 +72,7 @@ test('the token goes into the git environment, never onto a command line', () =>
   assert.equal(JSON.stringify(Object.keys(env)).includes('secret'), false);
 });
 
-test('isPublicGithubRepo: only a 200 answer with private=false counts; other hosts and failures never block', async () => {
+test('isPublicGithubRepo: public blocks, private/hidden passes, and an unverifiable GitHub repo fails closed', async () => {
   const answer =
     (status: number, body: unknown): typeof fetch =>
     () =>
@@ -83,8 +83,8 @@ test('isPublicGithubRepo: only a 200 answer with private=false counts; other hos
   assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', answer(200, { private: false })), true);
   assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', answer(200, { private: true })), false);
   assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', answer(404, {})), false);
-  assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', answer(403, {})), false);
+  await assert.rejects(isPublicGithubRepo('git@github.com:me/s.git', answer(403, {})), /cannot verify.*HTTP 403/i);
   assert.equal(await isPublicGithubRepo('git@gitlab.com:me/s.git', answer(200, { private: false })), false);
   const offline: typeof fetch = () => Promise.reject(new Error('offline'));
-  assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', offline), false);
+  await assert.rejects(isPublicGithubRepo('git@github.com:me/s.git', offline), /cannot verify/i);
 });

@@ -42,7 +42,20 @@ function pruneEmptyDirs(dir: string, isRoot = true): void {
   if (!isRoot && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
 }
 
-const digest = (file: string): string => crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex');
+/** Hash per file, valid while its size and modification time stay the same: unchanged sessions are not read again. */
+const hashed = new Map<string, { size: number; mtimeMs: number; hash: string }>();
+
+/** SHA-1 of a file, read as a stream so a big session does not block the editor. */
+async function digest(file: string): Promise<string> {
+  const stat = await fs.promises.stat(file);
+  const cached = hashed.get(file);
+  if (cached?.size === stat.size && cached.mtimeMs === stat.mtimeMs) return cached.hash;
+  const hash = crypto.createHash('sha1');
+  for await (const chunk of fs.createReadStream(file) as AsyncIterable<Buffer>) hash.update(chunk);
+  const hex = hash.digest('hex');
+  hashed.set(file, { size: stat.size, mtimeMs: stat.mtimeMs, hash: hex });
+  return hex;
+}
 
 const localPath = (root: string, rel: string): string => path.join(root, ...rel.split('/'));
 
@@ -76,16 +89,16 @@ export class MirrorTransport implements Transport {
       this.onProgress(`Downloading ${i + 1}/${todo.length}: ${path.basename(f.rel)}`);
       const local = localPath(this.root, f.rel);
       const data = await this.store.download(f.rel);
-      fs.mkdirSync(path.dirname(local), { recursive: true });
+      await fs.promises.mkdir(path.dirname(local), { recursive: true });
       const tmp = path.join(path.dirname(local), `.${path.basename(local)}.tmp-${process.pid}`);
-      fs.writeFileSync(tmp, data);
-      fs.renameSync(tmp, local);
+      await fs.promises.writeFile(tmp, data);
+      await fs.promises.rename(tmp, local);
     }
     this.known.clear();
     for (const f of walk(this.root)) {
       const file = localPath(this.root, f.rel);
       if (!this.remote.has(f.rel)) fs.rmSync(file);
-      else this.known.set(f.rel, digest(file));
+      else this.known.set(f.rel, await digest(file));
     }
     pruneEmptyDirs(this.root);
   }
@@ -94,13 +107,14 @@ export class MirrorTransport implements Transport {
     const local = walk(this.root);
     const localRels = new Set(local.map((f) => f.rel));
     let changed = false;
-    const hashes = new Map(local.map((f) => [f.rel, digest(localPath(this.root, f.rel))]));
+    const hashes = new Map<string, string>();
+    for (const f of local) hashes.set(f.rel, await digest(localPath(this.root, f.rel)));
     const toUpload = local.filter(
       (f) => this.remote.get(f.rel) !== f.size || this.known.get(f.rel) !== hashes.get(f.rel),
     );
     for (const [i, f] of toUpload.entries()) {
       this.onProgress(`Uploading ${i + 1}/${toUpload.length}: ${path.basename(f.rel)}`);
-      await this.store.upload(f.rel, fs.readFileSync(localPath(this.root, f.rel)));
+      await this.store.upload(f.rel, await fs.promises.readFile(localPath(this.root, f.rel)));
       this.remote.set(f.rel, f.size);
       this.known.set(f.rel, hashes.get(f.rel) ?? '');
       changed = true;

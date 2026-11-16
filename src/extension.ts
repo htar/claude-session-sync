@@ -528,7 +528,7 @@ const deviceLabel = (d: DeviceInfo): string => (d.legacy ? 'Shared (before 0.5.0
 /** Which device's export to work with. Skips the question when there is only one candidate. */
 async function chooseDevice(
   service: SyncService,
-  opts: { includeOwn: boolean; title: string; where: string },
+  opts: { includeOwn: boolean; title: string; where: string; lastUsed?: string },
 ): Promise<DeviceInfo | undefined> {
   const all = await progress('Claude Sync: looking at the storage…', () => service.devices());
   const devices = all.filter((d) => opts.includeOwn || d.name !== service.device);
@@ -550,9 +550,14 @@ async function chooseDevice(
     return undefined;
   }
   if (devices.length === 1 && !opts.includeOwn) return devices[0];
+  // The device used last time comes first, so the usual choice is one Enter away.
+  devices.sort((a, b) => Number(b.name === opts.lastUsed) - Number(a.name === opts.lastUsed));
   const pick = await vscode.window.showQuickPick(
     devices.map((d) => ({
-      label: deviceLabel(d) + (d.name === service.device ? ' (this device)' : ''),
+      label:
+        deviceLabel(d) +
+        (d.name === service.device ? ' (this device)' : '') +
+        (d.name === opts.lastUsed ? ' (last used)' : ''),
       description: `${d.sessions} session(s)`,
       device: d,
     })),
@@ -985,8 +990,10 @@ export function activate(context: vscode.ExtensionContext): void {
         includeOwn: false,
         where: s.where,
         title: 'Claude Sync: import from which device?',
+        lastUsed: context.globalState.get<string>('lastPullDevice'),
       });
       if (!from) return;
+      void context.globalState.update('lastPullDevice', from.name);
       const chosen = await chooseSessionsToPull(s.service, from.name);
       if (!chosen) return;
       const result = await progress('Claude Sync: pulling…', () => s.service.pull(from.name, chosen));

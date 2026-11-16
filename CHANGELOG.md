@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.4
+
+- Less load on VS Code: the check for API keys before a push reads sessions in pieces without blocking the editor
+  (before, a large project froze the extension host for seconds), and remembers files that did not change. The list of
+  sessions for «Resume» is remembered too.
+
 ## 0.10.3
 
 - The log («Show log») now records the extension version at start and what «Resume a session» found and started.

@@ -392,7 +392,7 @@ async function openSession(
 
 /** Before a push: sessions that look like they hold API keys or tokens are shown, and the user decides. */
 async function reviewSecrets(localDir: string, pending: readonly string[]): Promise<ReadonlySet<string> | 'cancel'> {
-  const hits = scanSessions(localDir, pending);
+  const hits = await scanSessions(localDir, pending);
   if (!hits.size) return new Set();
   const titles = new Map(listSessions(localDir).map((x) => [`${x.id}.jsonl`, x.title]));
   const lines = [...hits].map(([name, kinds]) => `• ${titles.get(name) ?? name}: ${kinds.join(', ')}`);

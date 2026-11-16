@@ -23,17 +23,52 @@ export function findSecrets(text: string): string[] {
   return PATTERNS.filter((p) => p.re.test(text)).map((p) => p.kind);
 }
 
+const CHUNK_BYTES = 4 * 1024 * 1024;
+/** Longest pattern match we need to catch when it straddles two chunks. */
+const OVERLAP_BYTES = 512;
+/** File → what was found, valid while its size and modification time stay the same: a session is not read twice. */
+const scanned = new Map<string, { size: number; mtimeMs: number; kinds: string[] }>();
+
+/**
+ * The kinds of credentials in one file. Read in chunks and with awaits in between, so a transcript of tens of
+ * megabytes never blocks the editor; decoded as latin1 (fast, and every pattern is plain ASCII).
+ */
+async function scanFile(file: string): Promise<string[]> {
+  const stat = await fs.promises.stat(file);
+  const hit = scanned.get(file);
+  if (hit?.size === stat.size && hit.mtimeMs === stat.mtimeMs) return hit.kinds;
+  const found = new Set<string>();
+  const handle = await fs.promises.open(file, 'r');
+  try {
+    const buffer = Buffer.alloc(CHUNK_BYTES + OVERLAP_BYTES);
+    let carry = 0;
+    for (let position = 0; position < stat.size;) {
+      const { bytesRead } = await handle.read(buffer, carry, CHUNK_BYTES, position);
+      if (bytesRead === 0) break;
+      position += bytesRead;
+      const length = carry + bytesRead;
+      for (const kind of findSecrets(buffer.toString('latin1', 0, length))) found.add(kind);
+      carry = Math.min(OVERLAP_BYTES, length);
+      buffer.copy(buffer, 0, length - carry, length);
+    }
+  } finally {
+    await handle.close();
+  }
+  const kinds = PATTERNS.filter((p) => found.has(p.kind)).map((p) => p.kind);
+  scanned.set(file, { size: stat.size, mtimeMs: stat.mtimeMs, kinds });
+  return kinds;
+}
+
 /** Sessions in `dir` (only `names`, when given) that look like they hold credentials: file name → kinds found. */
-export function scanSessions(dir: string, names: Iterable<string>): Map<string, string[]> {
+export async function scanSessions(dir: string, names: Iterable<string>): Promise<Map<string, string[]>> {
   const hits = new Map<string, string[]>();
   for (const name of names) {
-    let text: string;
+    let kinds: string[];
     try {
-      text = fs.readFileSync(path.join(dir, name), 'utf8');
+      kinds = await scanFile(path.join(dir, name));
     } catch {
       continue; // gone in the meantime, or not a file: the push itself will deal with it
     }
-    const kinds = findSecrets(text);
     if (kinds.length) hits.set(name, kinds);
   }
   return hits;

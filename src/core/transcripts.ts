@@ -230,6 +230,9 @@ export function lastActivity(file: string, stat: fs.Stats): number {
   return stat.mtimeMs;
 }
 
+/** Title and last activity per file, valid while its size and modification time stay the same (reading them is the slow part). */
+const infoCache = new Map<string, { size: number; mtimeMs: number; title: string; lastActivity: number }>();
+
 export function listSessions(dir: string): SessionInfo[] {
   if (!fs.existsSync(dir)) return [];
   const out: SessionInfo[] = [];
@@ -239,11 +242,21 @@ export function listSessions(dir: string): SessionInfo[] {
     try {
       const stat = fs.statSync(file);
       if (!stat.isFile() || stat.size === 0) continue; // an empty file is not a session worth resuming
+      let info = infoCache.get(file);
+      if (info?.size !== stat.size || info.mtimeMs !== stat.mtimeMs) {
+        info = {
+          size: stat.size,
+          mtimeMs: stat.mtimeMs,
+          title: readTitle(file),
+          lastActivity: lastActivity(file, stat),
+        };
+        infoCache.set(file, info);
+      }
       out.push({
         id: name.slice(0, -'.jsonl'.length),
         bytes: stat.size,
-        title: readTitle(file),
-        lastActivity: lastActivity(file, stat),
+        title: info.title,
+        lastActivity: info.lastActivity,
       });
     } catch {
       // unreadable or gone in the meantime: leave it out of the list

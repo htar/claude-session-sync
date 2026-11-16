@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { test } from 'node:test';
 import { findSecrets, scanSessions } from '../core/secrets';
 import { SyncService } from '../core/syncService';
@@ -35,12 +38,12 @@ test('findSecrets leaves ordinary code and prose alone', () => {
   }
 });
 
-test('scanSessions reports only the listed sessions that hold something, and skips missing files', () => {
+test('scanSessions reports only the listed sessions that hold something, and skips missing files', async () => {
   const d = tmp();
   write(d, 'a.jsonl', userLine(`token ${fake.github}`));
   write(d, 'b.jsonl', userLine('clean'));
   write(d, 'c.jsonl', userLine(fake.aws));
-  const hits = scanSessions(d, ['a.jsonl', 'b.jsonl', 'gone.jsonl']);
+  const hits = await scanSessions(d, ['a.jsonl', 'b.jsonl', 'gone.jsonl']);
   assert.deepEqual([...hits], [['a.jsonl', ['GitHub token']]]);
 });
 
@@ -85,4 +88,19 @@ test('a cancelled review sends nothing', async () => {
   assert.deepEqual(r.copied, []);
   const other = folderDevice('desktop', d.store);
   assert.deepEqual((await other.service.pull('laptop')).copied, []);
+});
+
+test('scanSessions finds a key that straddles two read chunks, and does not read an unchanged file twice', async () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'css-chunk-'));
+  const key = `ghp_${'a'.repeat(36)}`;
+  // 4 MiB chunk: put the key across the boundary.
+  const text = `${'x'.repeat(4 * 1024 * 1024 - 20)}${key}${'y'.repeat(1000)}`;
+  fs.writeFileSync(path.join(d, 'big.jsonl'), text);
+  assert.deepEqual([...(await scanSessions(d, ['big.jsonl']))], [['big.jsonl', ['GitHub token']]]);
+  // Same size and time: served from memory even if the content on disk is no longer readable as before.
+  const stat = fs.statSync(path.join(d, 'big.jsonl'));
+  assert.equal((await scanSessions(d, ['big.jsonl'])).size, 1);
+  fs.writeFileSync(path.join(d, 'big.jsonl'), 'clean');
+  fs.utimesSync(path.join(d, 'big.jsonl'), stat.atime, new Date(stat.mtimeMs + 5000));
+  assert.equal((await scanSessions(d, ['big.jsonl'])).size, 0);
 });

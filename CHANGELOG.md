@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.1
+
+- The pull also marks sessions that were already on this computer (pulled by an older version, or resumed here since), not only the ones it has just copied.
+
 ## 0.15.0
 
 - Pulled sessions show up in the session list of the Claude Code extension and in `claude --resume` on this computer: the pull marks each copied transcript as relocated to the open workspace folder (the same record Claude Code writes when a session is resumed in another folder).

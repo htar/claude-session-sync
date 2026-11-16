@@ -340,7 +340,9 @@ test('a pulled session is marked as relocated to this workspace, and the mark su
   write(laptop.localDir, 'abc-1.jsonl', line);
   await laptop.service.push();
 
-  await desktop.service.pull('laptop');
+  // Already on the desktop before this version marked anything: the pull skips the copy but still marks it.
+  write(desktop.localDir, 'abc-1.jsonl', line);
+  assert.deepEqual((await desktop.service.pull('laptop')).copied, []);
   const mark = (cwd: string) => `${JSON.stringify({ type: 'relocated', relocatedCwd: cwd, sessionId: 'abc-1' })}\n`;
   assert.equal(read(desktop.localDir, 'abc-1.jsonl'), line + mark('C:\\Users\\b\\proj'));
 

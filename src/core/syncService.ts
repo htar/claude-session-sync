@@ -169,13 +169,15 @@ export class SyncService {
       await this.cfg.transport.refresh();
       const only = ids && new Set(ids.map((id) => `${id}.jsonl`));
       const r = await copyTranscripts(this.dirOf(from), this.cfg.localDir, only ? { only } : {});
+      // Every session of this project, not only the ones just copied: a file pulled by an older version, or one
+      // this device has already resumed (so it is longer than the store's copy), still carries the other folder.
       let relocated = 0;
       if (this.cfg.workspacePath) {
-        for (const name of r.copied) {
+        for (const { id } of listSessions(this.cfg.localDir)) {
           try {
-            if (relocateTranscript(path.join(this.cfg.localDir, name), this.cfg.workspacePath)) relocated++;
+            if (relocateTranscript(path.join(this.cfg.localDir, `${id}.jsonl`), this.cfg.workspacePath)) relocated++;
           } catch (e) {
-            this.log.warn(`could not mark ${name} as relocated: ${String(e)}`);
+            this.log.warn(`could not mark ${id} as relocated: ${String(e)}`);
           }
         }
       }

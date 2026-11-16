@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { copyTranscripts, isPrefix, listSessions, readTitle } from '../core/transcripts';
+import {
+  copyTranscripts,
+  isPrefix,
+  listSessions,
+  readTitle,
+  relocateTranscript,
+  transcriptCwd,
+} from '../core/transcripts';
 import { read, tmp, touch, userLine, userLineAt, write } from './helpers';
 
 test('copies missing files and ignores everything that is not a session transcript', async () => {
@@ -149,4 +156,29 @@ test('the last activity is found even when the tail window starts in the middle 
   write(dir, 's.jsonl', huge + userLineAt('last', '2026-05-05T00:00:00.000Z'));
   touch(dir, 's.jsonl', new Date('2026-01-01'));
   assert.equal(listSessions(dir)[0]?.lastActivity, Date.parse('2026-05-05T00:00:00.000Z'));
+});
+
+test('relocateTranscript appends the «relocated» record Claude Code looks for, once', () => {
+  const dir = tmp();
+  const line = `${JSON.stringify({ type: 'user', cwd: '/Users/mac/proj', message: { content: 'hi' } })}\n`;
+  write(dir, 'abc-1.jsonl', line);
+  const file = path.join(dir, 'abc-1.jsonl');
+  assert.equal(transcriptCwd(file), '/Users/mac/proj');
+  assert.equal(relocateTranscript(file, '/Users/mac/proj'), false);
+  assert.equal(relocateTranscript(file, 'C:\\Users\\win\\proj'), true);
+  assert.equal(
+    read(dir, 'abc-1.jsonl'),
+    line + `${JSON.stringify({ type: 'relocated', relocatedCwd: 'C:\\Users\\win\\proj', sessionId: 'abc-1' })}\n`,
+  );
+  assert.equal(transcriptCwd(file), 'C:\\Users\\win\\proj');
+  assert.equal(relocateTranscript(file, 'C:\\Users\\win\\proj'), false);
+});
+
+test('relocateTranscript starts on a new line when the last line is unterminated, and skips files without a cwd', () => {
+  const dir = tmp();
+  write(dir, 's.jsonl', JSON.stringify({ type: 'user', cwd: '/a', message: { content: 'x' } }));
+  assert.equal(relocateTranscript(path.join(dir, 's.jsonl'), '/b'), true);
+  assert.equal(read(dir, 's.jsonl').split('\n').length, 3);
+  write(dir, 'n.jsonl', userLine('no cwd here'));
+  assert.equal(relocateTranscript(path.join(dir, 'n.jsonl'), '/b'), false);
 });

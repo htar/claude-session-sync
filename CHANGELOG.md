@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.0
+
+- Pulled sessions show up in the session list of the Claude Code extension and in `claude --resume` on this computer: the pull marks each copied transcript as relocated to the open workspace folder (the same record Claude Code writes when a session is resumed in another folder).
+
 ## 0.14.0
 
 - Push asks which sessions to store: tick the sessions in the list or use **Select all**, then press Enter.

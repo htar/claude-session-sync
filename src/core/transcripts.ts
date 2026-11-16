@@ -287,3 +287,64 @@ export function listSessions(dir: string): SessionInfo[] {
   }
   return out.sort((a, b) => b.lastActivity - a.lastActivity);
 }
+
+/** The folder Claude Code shows a session under: the newest «relocated» record, else the first `cwd` the transcript names. */
+export function transcriptCwd(file: string): string | undefined {
+  const stat = fs.statSync(file);
+  const length = Math.min(TAIL_BYTES, stat.size);
+  const buf = Buffer.alloc(length);
+  const fd = fs.openSync(file, 'r');
+  try {
+    fs.readSync(fd, buf, 0, length, stat.size - length);
+  } finally {
+    fs.closeSync(fd);
+  }
+  const lines = buf.toString('utf8').split('\n');
+  const first = stat.size > length ? 1 : 0;
+  for (let i = lines.length - 1; i >= first; i--) {
+    try {
+      const entry = JSON.parse(lines[i] ?? '') as { type?: string; relocatedCwd?: unknown };
+      if (entry.type === 'relocated' && typeof entry.relocatedCwd === 'string') return entry.relocatedCwd;
+    } catch {
+      // torn or non-JSON line
+    }
+  }
+  for (const line of headLines(file, TITLE_SCAN_BYTES)) {
+    try {
+      const { cwd } = JSON.parse(line) as { cwd?: unknown };
+      if (typeof cwd === 'string') return cwd;
+    } catch {
+      // not JSON
+    }
+  }
+  return undefined;
+}
+
+/** Claude Code compares folders by their project-dir spelling; Windows and macOS file systems ignore case. */
+function sameFolder(a: string, b: string): boolean {
+  const key = (p: string) => p.replace(/[^a-zA-Z0-9]/g, '-');
+  const fold = process.platform === 'win32' || process.platform === 'darwin';
+  return fold ? key(a).toLowerCase() === key(b).toLowerCase() : key(a) === key(b);
+}
+
+/**
+ * Makes a transcript that was recorded in another folder (a pulled one: the other device's path) show up under
+ * `workspacePath` in Claude Code's own session list, by appending the «relocated» record Claude Code itself writes
+ * when a session is resumed elsewhere. Returns true when the file was changed.
+ */
+export function relocateTranscript(file: string, workspacePath: string): boolean {
+  const cwd = transcriptCwd(file);
+  if (cwd === undefined || sameFolder(cwd, workspacePath)) return false;
+  const sessionId = path.basename(file, '.jsonl');
+  const record = `${JSON.stringify({ type: 'relocated', relocatedCwd: workspacePath, sessionId })}\n`;
+  const fd = fs.openSync(file, 'r+');
+  try {
+    const size = fs.fstatSync(fd).size;
+    const last = Buffer.alloc(1);
+    const endsWithNewline = size > 0 && fs.readSync(fd, last, 0, 1, size - 1) === 1 && last[0] === 0x0a;
+    fs.writeSync(fd, (endsWithNewline ? '' : '\n') + record, size);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return true;
+}

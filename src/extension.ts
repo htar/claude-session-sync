@@ -413,7 +413,15 @@ async function openSession(
   });
   const deviceName = deviceNameOf(context, cfg.get<string>('deviceName', '').trim());
   const service = new SyncService(
-    { transport, localDir, projectKey: key, deviceName, limits, installId: installIdOf(context) },
+    {
+      transport,
+      localDir,
+      projectKey: key,
+      workspacePath: folder,
+      deviceName,
+      limits,
+      installId: installIdOf(context),
+    },
     log,
   );
   return {

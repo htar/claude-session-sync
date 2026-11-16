@@ -331,3 +331,21 @@ test(
     assert.deepEqual(result.failed, ['broken.jsonl']);
   },
 );
+
+test('a pulled session is marked as relocated to this workspace, and the mark survives a round trip', async () => {
+  const remote = bareRepo();
+  const laptop = device(remote, 'laptop', { workspacePath: '/Users/a/proj' });
+  const desktop = device(remote, 'desktop', { workspacePath: 'C:\\Users\\b\\proj' });
+  const line = `${JSON.stringify({ type: 'user', cwd: '/Users/a/proj', message: { content: 'hi' } })}\n`;
+  write(laptop.localDir, 'abc-1.jsonl', line);
+  await laptop.service.push();
+
+  await desktop.service.pull('laptop');
+  const mark = (cwd: string) => `${JSON.stringify({ type: 'relocated', relocatedCwd: cwd, sessionId: 'abc-1' })}\n`;
+  assert.equal(read(desktop.localDir, 'abc-1.jsonl'), line + mark('C:\\Users\\b\\proj'));
+
+  // Pushed back from the desktop, the laptop's copy is extended and re-marked with the laptop's folder.
+  assert.equal((await desktop.service.push()).pushed, true);
+  assert.deepEqual((await laptop.service.pull('desktop')).copied, ['abc-1.jsonl']);
+  assert.equal(read(laptop.localDir, 'abc-1.jsonl'), line + mark('C:\\Users\\b\\proj') + mark('/Users/a/proj'));
+});

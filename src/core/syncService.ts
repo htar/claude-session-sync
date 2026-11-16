@@ -8,6 +8,7 @@ import {
   CopyResult,
   copyTranscripts,
   listSessions,
+  relocateTranscript,
   SessionInfo,
   sessionStatus,
   SessionStatus,
@@ -22,6 +23,8 @@ export interface SyncConfig {
   localDir: string;
   /** Key of the project in the shared store. */
   projectKey: string;
+  /** The workspace folder: pulled sessions are marked as relocated here, so Claude Code lists them under it. */
+  workspacePath?: string;
   /** This device's name: its own folder `devices/<name>/projects/<key>` is the only place a push writes to. */
   deviceName: string;
   /** This installation's id: tells two computers with the same device name apart. Without it nothing is checked. */
@@ -166,8 +169,18 @@ export class SyncService {
       await this.cfg.transport.refresh();
       const only = ids && new Set(ids.map((id) => `${id}.jsonl`));
       const r = await copyTranscripts(this.dirOf(from), this.cfg.localDir, only ? { only } : {});
+      let relocated = 0;
+      if (this.cfg.workspacePath) {
+        for (const name of r.copied) {
+          try {
+            if (relocateTranscript(path.join(this.cfg.localDir, name), this.cfg.workspacePath)) relocated++;
+          } catch (e) {
+            this.log.warn(`could not mark ${name} as relocated: ${String(e)}`);
+          }
+        }
+      }
       this.log.info(
-        `pull from ${from}: ${r.copied.length} copied, ${r.conflicts.length} conflicts, ${r.notDownloaded} not downloaded, failed=[${r.failed.join(', ')}]`,
+        `pull from ${from}: ${r.copied.length} copied (${relocated} relocated), ${r.conflicts.length} conflicts, ${r.notDownloaded} not downloaded, failed=[${r.failed.join(', ')}]`,
       );
       return {
         copied: r.copied,

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0
+
+- **Cancel** on the progress notification stops the running push or pull (the network requests are aborted).
+- Dropbox, OneDrive and Google Drive: up to four files are uploaded or downloaded at once.
+- Pull offers the device you used last time first.
+- Command names and setting descriptions are translated into Ukrainian, Spanish and Chinese (messages stay in English).
+
 ## 0.11.0
 
 - Own git repository on github.com: a public one is refused before a push (other hosts are not checked).

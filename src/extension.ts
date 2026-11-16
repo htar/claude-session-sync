@@ -620,6 +620,38 @@ const STATUS_LABEL: Record<string, string> = {
   conflict: t('differs from your copy'),
 };
 
+/** Lets the user tick local sessions to export. The check-all button is the explicit “all sessions” choice. */
+async function chooseSessionsToPush(localDir: string): Promise<string[] | undefined> {
+  const sessions = listSessions(localDir);
+  const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { id: string }>();
+  qp.canSelectMany = true;
+  qp.matchOnDetail = true;
+  qp.title = t('Claude Sync: which sessions to push? ({0} available)', sessions.length);
+  qp.placeholder = t('Tick the sessions to store, or use Select all, then press Enter');
+  qp.items = sessions.map((x) => ({
+    id: x.id,
+    label: x.title,
+    description: `${new Date(x.lastActivity).toLocaleString()} · ${mb(x.bytes)}`,
+    detail: x.id,
+  }));
+  const all = { iconPath: new vscode.ThemeIcon('check-all'), tooltip: t('Select all') };
+  qp.buttons = [all];
+  qp.onDidTriggerButton(() => {
+    qp.selectedItems = qp.items;
+  });
+  return new Promise<string[] | undefined>((resolve) => {
+    qp.onDidAccept(() => {
+      resolve(qp.selectedItems.map((i) => i.id));
+      qp.hide();
+    });
+    qp.onDidHide(() => {
+      resolve(undefined);
+      qp.dispose();
+    });
+    qp.show();
+  }).then((ids) => (ids?.length ? ids : undefined));
+}
+
 /** Lets the user tick the sessions to bring over. Returns their ids, or undefined when cancelled or nothing is left to pull. */
 async function chooseSessionsToPull(service: SyncService, from: string): Promise<string[] | undefined> {
   const sessions = (await progress(t('Claude Sync: looking at the storage…'), () => service.available(from))).filter(
@@ -909,7 +941,8 @@ export function activate(context: vscode.ExtensionContext): void {
     command(
       'push',
       async (s) => {
-        if (!listSessions(s.localDir).length) {
+        const localSessions = listSessions(s.localDir);
+        if (!localSessions.length) {
           void vscode.window.showInformationMessage(
             t(
               'Claude Sync: there are no Claude Code sessions for this project on this computer yet (looked in {0}). Start a session in Claude Code first.',
@@ -918,11 +951,13 @@ export function activate(context: vscode.ExtensionContext): void {
           );
           return;
         }
+        const chosen = await chooseSessionsToPush(s.localDir);
+        if (!chosen) return;
         const review = vscode.workspace.getConfiguration(SECTION).get<boolean>('scanSecrets', true)
           ? (pending: readonly string[]) => reviewSecrets(s.localDir, pending)
           : undefined;
         const run = (takeOver: boolean) =>
-          progress(t('Claude Sync: pushing…'), () => s.service.push({ takeOver, review }));
+          progress(t('Claude Sync: pushing…'), () => s.service.push({ takeOver, review, ids: chosen }));
         let result: SyncResult;
         try {
           result = await run(false);

@@ -83,6 +83,8 @@
   "Claude Sync: everything in the storage is already on this device.": "Claude Sync: todo lo del almacenamiento ya está en este dispositivo.",
   "Claude Sync: which sessions to pull? ({0} available)": "Claude Sync: ¿qué sesiones recibir? ({0} disponibles)",
   "Tick the sessions you want on this device, then press Enter": "Marca las sesiones que quieres en este dispositivo y pulsa Enter",
+  "Claude Sync: which sessions to push? ({0} available)": "Claude Sync: ¿qué sesiones enviar? ({0} disponibles)",
+  "Tick the sessions to store, or use Select all, then press Enter": "Marca las sesiones que quieres guardar o usa Seleccionar todo y pulsa Enter",
   "Select all": "Seleccionar todo",
   "Claude Sync: no access to GitHub ({0}).": "Claude Sync: sin acceso a GitHub ({0}).",
   "Claude Sync: the sync folder is not available ({0}).": "Claude Sync: la carpeta de sincronización no está disponible ({0}).",

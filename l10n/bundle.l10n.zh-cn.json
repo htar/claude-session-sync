@@ -83,6 +83,8 @@
   "Claude Sync: everything in the storage is already on this device.": "Claude Sync：存储中的所有内容已在此设备上。",
   "Claude Sync: which sessions to pull? ({0} available)": "Claude Sync：要拉取哪些会话？（可用 {0} 个）",
   "Tick the sessions you want on this device, then press Enter": "勾选此设备需要的会话，然后按 Enter",
+  "Claude Sync: which sessions to push? ({0} available)": "Claude Sync：要推送哪些会话？（可用 {0} 个）",
+  "Tick the sessions to store, or use Select all, then press Enter": "勾选要存储的会话，或使用“全选”，然后按 Enter",
   "Select all": "全选",
   "Claude Sync: no access to GitHub ({0}).": "Claude Sync：无法访问 GitHub（{0}）。",
   "Claude Sync: the sync folder is not available ({0}).": "Claude Sync：同步文件夹不可用（{0}）。",

@@ -144,6 +144,17 @@ test('folder mode: a session pushed to a shared folder is pulled on another devi
   assert.equal(read(desktop.localDir, 's.jsonl'), userLine('via cloud'));
 });
 
+test('push(ids) exports only the selected sessions', async () => {
+  const shared = tmp();
+  const [laptop, desktop] = [folderDevice(shared, 'laptop'), folderDevice(shared, 'desktop')];
+  write(laptop.localDir, 'a.jsonl', userLine('alpha'));
+  write(laptop.localDir, 'b.jsonl', userLine('beta'));
+  const pushed = await laptop.service.push({ ids: ['b'] });
+  assert.deepEqual(pushed.copied, ['b.jsonl']);
+  assert.deepEqual((await desktop.service.pull('laptop')).copied, ['b.jsonl']);
+  assert.equal(fs.existsSync(path.join(desktop.localDir, 'a.jsonl')), false);
+});
+
 test('folder mode: a diverged session is a conflict and is not overwritten', async () => {
   const shared = tmp();
   const [laptop, desktop] = [folderDevice(shared, 'laptop'), folderDevice(shared, 'desktop')];

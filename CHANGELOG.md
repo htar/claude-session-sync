@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.0
+
+- Push asks which sessions to store: tick the sessions in the list or use **Select all**, then press Enter.
+
 ## 0.13.0
 
 - Session transcripts are stored gzip-compressed in Dropbox, OneDrive and Google Drive, and compressed before encryption (typically about half the size). Older files are still read and are replaced by compressed ones on the next push.

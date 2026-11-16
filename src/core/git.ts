@@ -11,7 +11,7 @@ const SAFE_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
 const SAFE_FLAGS = ['-c', 'protocol.ext.allow=never'];
 
 /** https, ssh, scp-style (`git@host:owner/repo`) or an absolute local path. Never something git could read as an option. */
-const REPO_URL = /^(https:\/\/|ssh:\/\/|[\w.-]+@[\w.-]+:|\/)[^\s]+$/;
+const REPO_URL = /^(https:\/\/|ssh:\/\/|[\w.-]+@[\w.-]+:|\/|[a-zA-Z]:[\\/]|\\\\)[^\s]+$/;
 
 export function isValidRepoUrl(url: string): boolean {
   return !url.startsWith('-') && REPO_URL.test(url);
@@ -41,9 +41,13 @@ export async function ensureClone(repoDir: string, url: string, env?: GitEnv): P
   if (!isValidRepoUrl(url)) throw new Error(`Unsupported repository URL: ${url}`);
   if (!fs.existsSync(path.join(repoDir, '.git'))) {
     fs.mkdirSync(repoDir, { recursive: true });
-    await git(repoDir, ['clone', '--', url, '.'], env);
+    // Session transcripts are byte streams. A user's global core.autocrlf must not rewrite JSONL and create false
+    // conflicts when another device uses LF.
+    await git(repoDir, ['-c', 'core.autocrlf=false', 'clone', '--', url, '.'], env);
+    await git(repoDir, ['config', 'core.autocrlf', 'false']);
     return;
   }
+  await git(repoDir, ['config', 'core.autocrlf', 'false']);
   if ((await git(repoDir, ['remote', 'get-url', 'origin'])) !== url) {
     await git(repoDir, ['remote', 'set-url', 'origin', url]);
   }

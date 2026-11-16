@@ -81,17 +81,20 @@ export function githubSlug(repoUrl: string): string | undefined {
 }
 
 /**
- * True only when GitHub itself says a repository is public: asked without a token, a private one answers 404. Any
- * failure to ask (no network, rate limit) is «not known» and never blocks a push.
+ * True only when GitHub itself says a repository is public: asked without a token, a private one answers 404.
+ * A failure to verify is an error: session transcripts must never be pushed to a possibly public repository merely
+ * because the privacy check was rate-limited or offline.
  */
 export async function isPublicGithubRepo(repoUrl: string, fetchFn: Fetch = fetch): Promise<boolean> {
   const slug = githubSlug(repoUrl);
   if (!slug) return false;
   try {
     const res = await fetchFn(`${API}/repos/${slug}`, { headers: { Accept: 'application/vnd.github+json' } });
-    if (res.status !== 200) return false;
+    if (res.status === 404) return false;
+    if (res.status !== 200) throw new Error(`GitHub: cannot verify whether ${slug} is private (HTTP ${res.status}).`);
     return ((await res.json()) as { private?: boolean }).private === false;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('GitHub:')) throw error;
+    throw new Error(`GitHub: cannot verify whether ${slug} is private.`, { cause: error });
   }
 }

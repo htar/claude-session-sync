@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import * as path from 'node:path';
 import { test } from 'node:test';
 import { claudeProjectsDir, encodeProjectDir, projectKey, sanitizeProjectKey } from '../core/paths';
 
@@ -17,8 +18,8 @@ test('projectKey falls back to the folder name and is filesystem-safe', () => {
 });
 
 test('Claude Code folder: the setting wins, then CLAUDE_CONFIG_DIR, then ~/.claude', () => {
-  assert.equal(claudeProjectsDir('/a', { CLAUDE_CONFIG_DIR: '/b' }), '/a/projects');
-  assert.equal(claudeProjectsDir('', { CLAUDE_CONFIG_DIR: '/b' }), '/b/projects');
+  assert.equal(claudeProjectsDir('/a', { CLAUDE_CONFIG_DIR: '/b' }), path.join('/a', 'projects'));
+  assert.equal(claudeProjectsDir('', { CLAUDE_CONFIG_DIR: '/b' }), path.join('/b', 'projects'));
   assert.match(claudeProjectsDir('', {}), /\.claude[\\/]projects$/);
 });
 

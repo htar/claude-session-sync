@@ -175,7 +175,7 @@
     "build": "node scripts/build.mjs",
     "build:prod": "node scripts/build.mjs --prod",
     "typecheck": "tsc -p . --noEmit",
-    "lint": "eslint . --max-warnings 0 && prettier --check .",
+    "lint": "eslint . --max-warnings 0 && prettier --check --end-of-line auto .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "test": "tsc -p tsconfig.test.json && node --test out/test/*.test.js",
     "check": "npm run typecheck && npm run lint && npm test",

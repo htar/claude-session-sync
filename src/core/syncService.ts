@@ -39,6 +39,8 @@ export interface SyncResult {
   tooLarge: string[];
   /** How many sessions older than the age limit were left out of the push. */
   tooOld: number;
+  /** Could not be read or written (locked, no permission): the rest was still copied. */
+  failed?: string[];
   /** iCloud files not downloaded to this device yet (pull only). */
   notDownloaded?: number;
   /** push only: false when nothing changed. */
@@ -113,13 +115,14 @@ export class SyncService {
           );
           this.log.info(
             `push: ${last.copied.length} copied, ${last.conflicts.length} conflicts, ` +
-              `${last.tooLarge.length} too large, ${last.tooOld} too old, pushed=${pushed}`,
+              `${last.tooLarge.length} too large, ${last.tooOld} too old, failed=[${last.failed.join(', ')}], pushed=${pushed}`,
           );
           return {
             copied: last.copied,
             conflicts: last.conflicts,
             tooLarge: last.tooLarge,
             tooOld: last.tooOld,
+            failed: last.failed,
             pushed,
           };
         } catch (e) {
@@ -163,9 +166,16 @@ export class SyncService {
       const only = ids && new Set(ids.map((id) => `${id}.jsonl`));
       const r = await copyTranscripts(this.dirOf(from), this.cfg.localDir, only ? { only } : {});
       this.log.info(
-        `pull from ${from}: ${r.copied.length} copied, ${r.conflicts.length} conflicts, ${r.notDownloaded} not downloaded`,
+        `pull from ${from}: ${r.copied.length} copied, ${r.conflicts.length} conflicts, ${r.notDownloaded} not downloaded, failed=[${r.failed.join(', ')}]`,
       );
-      return { copied: r.copied, conflicts: r.conflicts, tooLarge: [], tooOld: 0, notDownloaded: r.notDownloaded };
+      return {
+        copied: r.copied,
+        conflicts: r.conflicts,
+        tooLarge: [],
+        tooOld: 0,
+        failed: r.failed,
+        notDownloaded: r.notDownloaded,
+      };
     });
   }
 

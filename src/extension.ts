@@ -485,6 +485,14 @@ function report(verb: 'push' | 'pull', r: SyncResult, limits: Limits, where: str
       `Claude Sync: ${r.tooLarge.length} session(s) are over ${Math.round(limits.maxFileBytes / MB)} MB and were NOT pushed: ${r.tooLarge.join(', ')}`,
     );
   }
+  if (r.failed?.length) {
+    void vscode.window
+      .showWarningMessage(
+        `Claude Sync: ${r.failed.length} session(s) could not be read or written and were skipped (the rest went through): ${r.failed.join(', ')}. See the log.`,
+        'Show log',
+      )
+      .then((pick) => (pick ? vscode.commands.executeCommand(`${SECTION}.showLog`) : undefined));
+  }
   if (r.notDownloaded) {
     void vscode.window.showWarningMessage(
       `Claude Sync: ${r.notDownloaded} session(s) are still in iCloud and not downloaded to this Mac yet. ` +

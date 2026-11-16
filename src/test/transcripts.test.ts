@@ -5,78 +5,78 @@ import { test } from 'node:test';
 import { copyTranscripts, isPrefix, listSessions, readTitle } from '../core/transcripts';
 import { read, tmp, touch, userLine, userLineAt, write } from './helpers';
 
-test('copies missing files and ignores everything that is not a session transcript', () => {
+test('copies missing files and ignores everything that is not a session transcript', async () => {
   const [a, b] = [path.join(tmp(), 'a'), path.join(tmp(), 'b')];
   write(a, 's1.jsonl', userLine('hello'));
   write(a, 'notes.txt', 'x');
   write(a, '..evil.jsonl', 'x');
-  const r = copyTranscripts(a, b);
+  const r = await copyTranscripts(a, b);
   assert.deepEqual(r.copied, ['s1.jsonl']);
   assert.deepEqual(fs.readdirSync(b), ['s1.jsonl']);
 });
 
-test('a longer file extending the shorter one overwrites it', () => {
+test('a longer file extending the shorter one overwrites it', async () => {
   const [a, b] = [path.join(tmp(), 'a'), path.join(tmp(), 'b')];
   write(b, 's.jsonl', 'one\n');
   write(a, 's.jsonl', 'one\ntwo\n');
-  assert.deepEqual(copyTranscripts(a, b).copied, ['s.jsonl']);
+  assert.deepEqual((await copyTranscripts(a, b)).copied, ['s.jsonl']);
   assert.equal(read(b, 's.jsonl'), 'one\ntwo\n');
 });
 
-test('a destination that is further along is kept', () => {
+test('a destination that is further along is kept', async () => {
   const [a, b] = [path.join(tmp(), 'a'), path.join(tmp(), 'b')];
   write(a, 's.jsonl', 'one\n');
   write(b, 's.jsonl', 'one\ntwo\n');
-  const r = copyTranscripts(a, b);
+  const r = await copyTranscripts(a, b);
   assert.deepEqual(r.skipped, ['s.jsonl']);
   assert.equal(read(b, 's.jsonl'), 'one\ntwo\n');
 });
 
-test('diverged transcripts are reported and nothing is overwritten', () => {
+test('diverged transcripts are reported and nothing is overwritten', async () => {
   const [a, b] = [path.join(tmp(), 'a'), path.join(tmp(), 'b')];
   write(a, 's.jsonl', 'one\nLAPTOP\n');
   write(b, 's.jsonl', 'one\nDESKTOP-longer\n');
-  const r = copyTranscripts(a, b);
+  const r = await copyTranscripts(a, b);
   assert.deepEqual(r.conflicts, ['s.jsonl']);
   assert.equal(read(b, 's.jsonl'), 'one\nDESKTOP-longer\n');
 });
 
-test('files over the size limit are reported and not copied', () => {
+test('files over the size limit are reported and not copied', async () => {
   const [a, b] = [path.join(tmp(), 'a'), path.join(tmp(), 'b')];
   write(a, 'small.jsonl', 'tiny\n');
   write(a, 'big.jsonl', 'x'.repeat(100));
-  const r = copyTranscripts(a, b, { maxBytes: 50 });
+  const r = await copyTranscripts(a, b, { maxBytes: 50 });
   assert.deepEqual(r.copied, ['small.jsonl']);
   assert.deepEqual(r.tooLarge, ['big.jsonl']);
   assert.deepEqual(fs.readdirSync(b), ['small.jsonl']);
 });
 
-test('files older than the age limit are only counted, not copied', () => {
+test('files older than the age limit are only counted, not copied', async () => {
   const [a, b] = [path.join(tmp(), 'a'), path.join(tmp(), 'b')];
   write(a, 'recent.jsonl', 'r\n');
   write(a, 'old.jsonl', 'o\n');
   touch(a, 'recent.jsonl', new Date('2026-09-01'));
   touch(a, 'old.jsonl', new Date('2026-01-01'));
-  const r = copyTranscripts(a, b, { modifiedAfterMs: Date.parse('2026-06-01') });
+  const r = await copyTranscripts(a, b, { modifiedAfterMs: Date.parse('2026-06-01') });
   assert.deepEqual(r.copied, ['recent.jsonl']);
   assert.equal(r.tooOld, 1);
   assert.deepEqual(fs.readdirSync(b), ['recent.jsonl']);
 });
 
-test('a file that is both old and large counts as old only', () => {
+test('a file that is both old and large counts as old only', async () => {
   const [a, b] = [path.join(tmp(), 'a'), path.join(tmp(), 'b')];
   write(a, 'old-big.jsonl', 'x'.repeat(100));
   touch(a, 'old-big.jsonl', new Date('2026-01-01'));
-  const r = copyTranscripts(a, b, { maxBytes: 50, modifiedAfterMs: Date.parse('2026-06-01') });
+  const r = await copyTranscripts(a, b, { maxBytes: 50, modifiedAfterMs: Date.parse('2026-06-01') });
   assert.equal(r.tooOld, 1);
   assert.deepEqual(r.tooLarge, []);
 });
 
-test('empty transcripts are neither copied nor listed', () => {
+test('empty transcripts are neither copied nor listed', async () => {
   const [a, b] = [path.join(tmp(), 'a'), path.join(tmp(), 'b')];
   write(a, 'empty.jsonl', '');
   write(a, 'real.jsonl', userLine('work'));
-  const r = copyTranscripts(a, b);
+  const r = await copyTranscripts(a, b);
   assert.deepEqual(r.copied, ['real.jsonl']);
   assert.deepEqual(fs.readdirSync(b), ['real.jsonl']);
   assert.deepEqual(

@@ -34,8 +34,17 @@ async function withTimeout(
   const controller = new AbortController();
   const outer = init?.signal;
   if (outer?.aborted) controller.abort();
-  else outer?.addEventListener('abort', () => { controller.abort(); }, { once: true });
-  const timer = setTimeout(() => { controller.abort(new Error('The storage did not answer in time.')); }, timeoutMs);
+  else
+    outer?.addEventListener(
+      'abort',
+      () => {
+        controller.abort();
+      },
+      { once: true },
+    );
+  const timer = setTimeout(() => {
+    controller.abort(new Error('The storage did not answer in time.'));
+  }, timeoutMs);
   try {
     return await fetchFn(input, { ...init, signal: controller.signal });
   } finally {

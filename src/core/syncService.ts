@@ -96,13 +96,16 @@ export class SyncService {
         this.claimDevice(opts.takeOver === true);
         if (opts.review && !reviewed) {
           reviewed = true; // a retry after a lost race must not ask again
-          const pending = copyTranscripts(this.cfg.localDir, this.dirOf(this.device), { ...filter, dryRun: true });
+          const pending = await copyTranscripts(this.cfg.localDir, this.dirOf(this.device), {
+            ...filter,
+            dryRun: true,
+          });
           const verdict = await opts.review(pending.copied);
           if (verdict === 'cancel')
             return { copied: [], conflicts: [], tooLarge: [], tooOld: 0, pushed: false, cancelled: true };
           filter.exclude = verdict;
         }
-        last = copyTranscripts(this.cfg.localDir, this.dirOf(this.device), filter);
+        last = await copyTranscripts(this.cfg.localDir, this.dirOf(this.device), filter);
         try {
           const pushed = await this.cfg.transport.publish(
             `sync ${this.device}: ${last.copied.length} session(s)`,
@@ -141,10 +144,15 @@ export class SyncService {
     return this.exclusive(async () => {
       await this.cfg.transport.refresh();
       const dir = this.dirOf(from);
-      return listSessions(dir).map((s) => ({
-        ...s,
-        status: sessionStatus(path.join(dir, `${s.id}.jsonl`), path.join(this.cfg.localDir, `${s.id}.jsonl`)),
-      }));
+      const out: AvailableSession[] = [];
+      for (const s of listSessions(dir)) {
+        const status = await sessionStatus(
+          path.join(dir, `${s.id}.jsonl`),
+          path.join(this.cfg.localDir, `${s.id}.jsonl`),
+        );
+        out.push({ ...s, status });
+      }
+      return out;
     });
   }
 
@@ -153,7 +161,7 @@ export class SyncService {
     return this.exclusive(async () => {
       await this.cfg.transport.refresh();
       const only = ids && new Set(ids.map((id) => `${id}.jsonl`));
-      const r = copyTranscripts(this.dirOf(from), this.cfg.localDir, only ? { only } : {});
+      const r = await copyTranscripts(this.dirOf(from), this.cfg.localDir, only ? { only } : {});
       this.log.info(
         `pull from ${from}: ${r.copied.length} copied, ${r.conflicts.length} conflicts, ${r.notDownloaded} not downloaded`,
       );

@@ -62,11 +62,33 @@ export function isPrefix(shorter: string, longer: string): boolean {
   }
 }
 
-function atomicCopy(from: string, to: string): void {
+/** `isPrefix` for the copy loop: reads in pieces with awaits in between, so a big transcript does not freeze the editor. */
+async function isPrefixAsync(shorter: string, longer: string): Promise<boolean> {
+  const size = (await fs.promises.stat(shorter)).size;
+  if (size > (await fs.promises.stat(longer)).size) return false;
+  const a = Buffer.alloc(CHUNK);
+  const b = Buffer.alloc(CHUNK);
+  const fdA = await fs.promises.open(shorter, 'r');
+  const fdB = await fs.promises.open(longer, 'r');
+  try {
+    for (let pos = 0; pos < size; pos += CHUNK) {
+      const len = Math.min(CHUNK, size - pos);
+      await fdA.read(a, 0, len, pos);
+      await fdB.read(b, 0, len, pos);
+      if (!a.subarray(0, len).equals(b.subarray(0, len))) return false;
+    }
+    return true;
+  } finally {
+    await fdA.close();
+    await fdB.close();
+  }
+}
+
+async function atomicCopy(from: string, to: string): Promise<void> {
   // Hidden, so a cloud-synced folder never shows a half-written file under a real session name.
   const tmp = path.join(path.dirname(to), `.${path.basename(to)}.tmp-${process.pid}`);
-  fs.copyFileSync(from, tmp);
-  fs.renameSync(tmp, to);
+  await fs.promises.copyFile(from, tmp);
+  await fs.promises.rename(tmp, to);
 }
 
 /**
@@ -74,7 +96,7 @@ function atomicCopy(from: string, to: string): void {
  * complete version: that is the only case that overwrites. Diverged files are reported, never lost.
  * An old file is left out before it is looked at, so a huge old session is not reported as too large.
  */
-export function copyTranscripts(src: string, dst: string, options: CopyOptions = {}): CopyResult {
+export async function copyTranscripts(src: string, dst: string, options: CopyOptions = {}): Promise<CopyResult> {
   const result: CopyResult = {
     copied: [],
     skipped: [],
@@ -85,26 +107,26 @@ export function copyTranscripts(src: string, dst: string, options: CopyOptions =
     failed: [],
   };
   if (!fs.existsSync(src)) return result;
-  const copy = (from: string, to: string): void => {
+  const copy = async (from: string, to: string): Promise<void> => {
     if (options.dryRun) return;
-    fs.mkdirSync(dst, { recursive: true });
-    atomicCopy(from, to);
+    await fs.promises.mkdir(dst, { recursive: true });
+    await atomicCopy(from, to);
   };
   for (const name of fs.readdirSync(src)) {
     if (ICLOUD_PLACEHOLDER.test(name)) result.notDownloaded++;
     if (!SESSION_FILE.test(name) || (options.only && !options.only.has(name)) || options.exclude?.has(name)) continue;
     try {
-      copyOne(name);
+      await copyOne(name);
     } catch {
       result.failed.push(name);
     }
   }
   return result;
 
-  function copyOne(name: string): void {
+  async function copyOne(name: string): Promise<void> {
     const from = path.join(src, name);
     const to = path.join(dst, name);
-    const stat = fs.statSync(from);
+    const stat = await fs.promises.stat(from);
     if (!stat.isFile()) return; // a folder that happens to be named like a session
     if (stat.size === 0) return; // Claude leaves empty session files behind: nothing to sync
     if (options.modifiedAfterMs !== undefined && stat.mtimeMs < options.modifiedAfterMs) {
@@ -112,12 +134,12 @@ export function copyTranscripts(src: string, dst: string, options: CopyOptions =
     } else if (options.maxBytes !== undefined && stat.size > options.maxBytes) {
       result.tooLarge.push(name);
     } else if (!fs.existsSync(to)) {
-      copy(from, to);
+      await copy(from, to);
       result.copied.push(name);
-    } else if (stat.size > fs.statSync(to).size && isPrefix(to, from)) {
-      copy(from, to);
+    } else if (stat.size > (await fs.promises.stat(to)).size && (await isPrefixAsync(to, from))) {
+      await copy(from, to);
       result.copied.push(name);
-    } else if (isPrefix(from, to)) {
+    } else if (await isPrefixAsync(from, to)) {
       result.skipped.push(name);
     } else {
       result.conflicts.push(name);
@@ -128,10 +150,11 @@ export function copyTranscripts(src: string, dst: string, options: CopyOptions =
 export type SessionStatus = 'new' | 'updated' | 'same' | 'conflict';
 
 /** What copying `from` onto `to` would do: the same decision `copyTranscripts` makes, without doing it. */
-export function sessionStatus(from: string, to: string): SessionStatus {
+export async function sessionStatus(from: string, to: string): Promise<SessionStatus> {
   if (!fs.existsSync(to)) return 'new';
-  if (fs.statSync(from).size > fs.statSync(to).size && isPrefix(to, from)) return 'updated';
-  return isPrefix(from, to) ? 'same' : 'conflict';
+  if ((await fs.promises.stat(from)).size > (await fs.promises.stat(to)).size && (await isPrefixAsync(to, from)))
+    return 'updated';
+  return (await isPrefixAsync(from, to)) ? 'same' : 'conflict';
 }
 
 export interface SessionInfo {

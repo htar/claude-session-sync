@@ -1083,9 +1083,9 @@ test('OAuth configs: authorize URLs carry PKCE and state; OneDrive asks for offl
 
 // ---------------------------------------------------------------- transcripts
 
-test('copyTranscripts: missing source, empty files, non-session names, traversal-like names, iCloud placeholders', () => {
+test('copyTranscripts: missing source, empty files, non-session names, traversal-like names, iCloud placeholders', async () => {
   const dst = path.join(tmp(), 'dst');
-  assert.deepEqual(copyTranscripts(path.join(tmp(), 'none'), dst).copied, []);
+  assert.deepEqual((await copyTranscripts(path.join(tmp(), 'none'), dst)).copied, []);
   const src = tmp();
   write(src, 'ok-1.jsonl', userLine('a'));
   write(src, 'empty.jsonl', '');
@@ -1095,54 +1095,54 @@ test('copyTranscripts: missing source, empty files, non-session names, traversal
   write(src, 'ünï.jsonl', 'x');
   write(src, '.abc-2.jsonl.icloud', '');
   write(src, '.tmp.jsonl.tmp-1', 'x');
-  const r = copyTranscripts(src, dst);
+  const r = await copyTranscripts(src, dst);
   assert.deepEqual(r.copied, ['ok-1.jsonl']);
   assert.equal(r.notDownloaded, 1);
   assert.deepEqual(fs.readdirSync(dst), ['ok-1.jsonl']);
 });
 
-test('a directory named like a session (`x.jsonl/`) is skipped by copyTranscripts', () => {
+test('a directory named like a session (`x.jsonl/`) is skipped by copyTranscripts', async () => {
   const src = tmp();
   fs.mkdirSync(path.join(src, 'dir.jsonl'));
   fs.writeFileSync(path.join(src, 'dir.jsonl', 'f'), 'x');
-  assert.doesNotThrow(() => copyTranscripts(src, tmp()));
+  await assert.doesNotReject(copyTranscripts(src, tmp()));
   assert.deepEqual(listSessions(src), []);
 });
 
-test('copyTranscripts: tmp files are not left behind; extended source overwrites, shorter source is skipped, diverged is a conflict', () => {
+test('copyTranscripts: tmp files are not left behind; extended source overwrites, shorter source is skipped, diverged is a conflict', async () => {
   const src = tmp();
   const dst = tmp();
   write(src, 's.jsonl', userLine('a') + userLine('b'));
   write(dst, 's.jsonl', userLine('a'));
-  assert.deepEqual(copyTranscripts(src, dst).copied, ['s.jsonl']);
+  assert.deepEqual((await copyTranscripts(src, dst)).copied, ['s.jsonl']);
   assert.deepEqual(fs.readdirSync(dst), ['s.jsonl']);
-  assert.deepEqual(copyTranscripts(src, dst).skipped, ['s.jsonl']);
+  assert.deepEqual((await copyTranscripts(src, dst)).skipped, ['s.jsonl']);
   write(dst, 's.jsonl', userLine('a') + userLine('b') + userLine('c'));
-  assert.deepEqual(copyTranscripts(src, dst).skipped, ['s.jsonl']);
+  assert.deepEqual((await copyTranscripts(src, dst)).skipped, ['s.jsonl']);
   write(dst, 's.jsonl', userLine('a') + userLine('X'));
-  assert.deepEqual(copyTranscripts(src, dst).conflicts, ['s.jsonl']);
+  assert.deepEqual((await copyTranscripts(src, dst)).conflicts, ['s.jsonl']);
   assert.equal(read(dst, 's.jsonl'), userLine('a') + userLine('X'));
 });
 
-test('copyTranscripts: `only` filters without counting; same-size different content is a conflict', () => {
+test('copyTranscripts: `only` filters without counting; same-size different content is a conflict', async () => {
   const src = tmp();
   const dst = tmp();
   write(src, 'a.jsonl', 'aaaa');
   write(src, 'b.jsonl', 'bbbb');
   write(dst, 'b.jsonl', 'cccc');
-  const r = copyTranscripts(src, dst, { only: new Set(['a.jsonl']) });
+  const r = await copyTranscripts(src, dst, { only: new Set(['a.jsonl']) });
   assert.deepEqual(r.copied, ['a.jsonl']);
   assert.deepEqual(r.conflicts, []);
-  assert.deepEqual(copyTranscripts(src, dst).conflicts, ['b.jsonl']);
+  assert.deepEqual((await copyTranscripts(src, dst)).conflicts, ['b.jsonl']);
 });
 
-test('copyTranscripts: size limit is inclusive; the age check runs before the size check', () => {
+test('copyTranscripts: size limit is inclusive; the age check runs before the size check', async () => {
   const src = tmp();
   write(src, 'exact.jsonl', 'x'.repeat(10));
   write(src, 'over.jsonl', 'x'.repeat(11));
   write(src, 'oldbig.jsonl', 'x'.repeat(100));
   touch(src, 'oldbig.jsonl', new Date(2000, 0, 1));
-  const r = copyTranscripts(src, tmp(), { maxBytes: 10, modifiedAfterMs: Date.now() - 86_400_000 });
+  const r = await copyTranscripts(src, tmp(), { maxBytes: 10, modifiedAfterMs: Date.now() - 86_400_000 });
   assert.deepEqual(r.copied, ['exact.jsonl']);
   assert.deepEqual(r.tooLarge, ['over.jsonl']);
   assert.equal(r.tooOld, 1);
@@ -1164,17 +1164,17 @@ test('isPrefix: empty prefix, multi-chunk files, one byte differing deep inside'
   assert.equal(isPrefix(path.join(dir, 'empty'), path.join(dir, 'big')), true);
 });
 
-test('sessionStatus: new, updated, same (also when local is ahead), conflict', () => {
+test('sessionStatus: new, updated, same (also when local is ahead), conflict', async () => {
   const a = tmp();
   const b = tmp();
   write(a, 's.jsonl', 'ab\n');
-  assert.equal(sessionStatus(path.join(a, 's.jsonl'), path.join(b, 's.jsonl')), 'new');
+  assert.equal(await sessionStatus(path.join(a, 's.jsonl'), path.join(b, 's.jsonl')), 'new');
   write(b, 's.jsonl', 'a');
-  assert.equal(sessionStatus(path.join(a, 's.jsonl'), path.join(b, 's.jsonl')), 'updated');
+  assert.equal(await sessionStatus(path.join(a, 's.jsonl'), path.join(b, 's.jsonl')), 'updated');
   write(b, 's.jsonl', 'ab\nc');
-  assert.equal(sessionStatus(path.join(a, 's.jsonl'), path.join(b, 's.jsonl')), 'same');
+  assert.equal(await sessionStatus(path.join(a, 's.jsonl'), path.join(b, 's.jsonl')), 'same');
   write(b, 's.jsonl', 'zz\n');
-  assert.equal(sessionStatus(path.join(a, 's.jsonl'), path.join(b, 's.jsonl')), 'conflict');
+  assert.equal(await sessionStatus(path.join(a, 's.jsonl'), path.join(b, 's.jsonl')), 'conflict');
 });
 
 test('readTitle: unicode, whitespace collapse, 80-char cut, block content, non-user entries, empty file', () => {
@@ -1591,7 +1591,7 @@ test('tokenProvider: fresh skips the cached access token', async () => {
   assert.equal(await token({ fresh: true }), 'T2');
 });
 
-test('listSessions leaves out sub-agent logs; copyTranscripts reports a file it cannot read and copies the rest', () => {
+test('listSessions leaves out sub-agent logs; copyTranscripts reports a file it cannot read and copies the rest', async () => {
   const src = fs.mkdtempSync(path.join(os.tmpdir(), 'css-agent-'));
   const dst = fs.mkdtempSync(path.join(os.tmpdir(), 'css-agent-dst-'));
   const line = '{"type":"user","message":{"content":"hi"}}\n';
@@ -1602,7 +1602,7 @@ test('listSessions leaves out sub-agent logs; copyTranscripts reports a file it 
     listSessions(src).map((s) => s.id),
     ['good'],
   );
-  const result = copyTranscripts(src, dst);
+  const result = await copyTranscripts(src, dst);
   assert.deepEqual(result.failed, ['broken.jsonl']);
   assert.ok(result.copied.includes('good.jsonl'));
 });

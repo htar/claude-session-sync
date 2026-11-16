@@ -84,6 +84,7 @@ All settings apply per machine: set them in User settings.
 - Before every Push the sessions about to be sent are checked for API keys, tokens and private keys (AWS, GitHub,
   Anthropic, OpenAI, Slack, Stripe, Google, npm). If something is found you see which sessions and can leave them out.
   Turn it off with `claudeSessionSync.scanSecrets`.
+- With your own git repository on github.com, the extension asks GitHub whether it is public and refuses to push if it is. Other hosts are not checked: keep that repository private yourself.
 - Sessions contain your code, command output and **possibly secrets**. Send them only to private storage: a private
   repository or your own cloud. The extension warns you before the first Push.
 - The GitHub method asks for the `repo` permission (GitHub has nothing narrower for private repositories). The token

@@ -84,6 +84,7 @@ Todos los ajustes se aplican por equipo: defínelos en los ajustes de usuario (U
 - Antes de cada Push se revisan las sesiones que se van a enviar en busca de claves de API, tokens y claves privadas
   (AWS, GitHub, Anthropic, OpenAI, Slack, Stripe, Google, npm). Si se encuentra algo, verás qué sesiones son y podrás
   dejarlas fuera. Se desactiva con `claudeSessionSync.scanSecrets`.
+- Con tu propio repositorio git en github.com, la extensión pregunta a GitHub si es público y se niega a hacer Push si lo es. Otros servidores no se comprueban: mantén ese repositorio privado tú mismo.
 - Las sesiones contienen tu código, la salida de comandos y **posiblemente secretos**. Envíalas solo a un
   almacenamiento privado: un repositorio privado o tu propia nube. La extensión te avisa antes del primer Push.
 - El método GitHub pide el permiso `repo` (GitHub no tiene uno más limitado para repositorios privados). El token

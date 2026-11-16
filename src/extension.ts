@@ -13,7 +13,7 @@ import { classifyError, redactSecrets } from './core/errors';
 import { retryingFetch } from './core/http';
 import { signIn, tokenProvider } from './core/oauth';
 import { MirrorTransport } from './core/remote';
-import { ensurePrivateRepo, githubAuthEnv } from './core/github';
+import { ensurePrivateRepo, githubAuthEnv, isPublicGithubRepo, PublicRepoError } from './core/github';
 import { Limits, MB, parseLimits } from './core/limits';
 import { Logger } from './core/logger';
 import { claudeProjectsDir, encodeProjectDir, projectKey, sanitizeProjectKey } from './core/paths';
@@ -339,6 +339,10 @@ async function gitTransport(context: vscode.ExtensionContext, cfg: vscode.Worksp
     if (pick) await vscode.commands.executeCommand('workbench.action.openSettings', `${SECTION}.repoUrl`);
     return undefined;
   }
+  if (await isPublicGithubRepo(repoUrl))
+    throw new PublicRepoError(
+      `${repoUrl} is a PUBLIC repository: your sessions (code, command output, maybe secrets) would be visible to everyone. Make it private on GitHub, or use another repository.`,
+    );
   return new GitTransport(path.join(context.globalStorageUri.fsPath, 'repo'), repoUrl, undefined, step);
 }
 

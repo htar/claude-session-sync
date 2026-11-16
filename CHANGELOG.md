@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0
+
+- Own git repository on github.com: a public one is refused before a push (other hosts are not checked).
+- Sessions that could not be copied are named after a push or pull (and in the log) instead of being skipped silently.
+- Less load on VS Code: copying and comparing sessions, hashing for the cloud mirror and encryption no longer block the
+  editor on a big project.
+
 ## 0.10.4
 
 - Less load on VS Code: the check for API keys before a push reads sessions in pieces without blocking the editor

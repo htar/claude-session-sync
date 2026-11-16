@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ensurePrivateRepo, githubAuthEnv, PublicRepoError } from '../core/github';
+import { ensurePrivateRepo, githubAuthEnv, githubSlug, isPublicGithubRepo, PublicRepoError } from '../core/github';
 
 type Route = { status: number; body?: unknown };
 
@@ -70,4 +70,21 @@ test('the token goes into the git environment, never onto a command line', () =>
   assert.equal(env.GIT_CONFIG_KEY_0, 'http.extraheader');
   assert.match(env.GIT_CONFIG_VALUE_0 ?? '', /^Authorization: Basic /);
   assert.equal(JSON.stringify(Object.keys(env)).includes('secret'), false);
+});
+
+test('isPublicGithubRepo: only a 200 answer with private=false counts; other hosts and failures never block', async () => {
+  const answer =
+    (status: number, body: unknown): typeof fetch =>
+    () =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+  assert.equal(githubSlug('git@github.com:me/sessions.git'), 'me/sessions');
+  assert.equal(githubSlug('https://token@github.com/me/sessions'), 'me/sessions');
+  assert.equal(githubSlug('git@gitlab.com:me/sessions.git'), undefined);
+  assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', answer(200, { private: false })), true);
+  assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', answer(200, { private: true })), false);
+  assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', answer(404, {})), false);
+  assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', answer(403, {})), false);
+  assert.equal(await isPublicGithubRepo('git@gitlab.com:me/s.git', answer(200, { private: false })), false);
+  const offline: typeof fetch = () => Promise.reject(new Error('offline'));
+  assert.equal(await isPublicGithubRepo('git@github.com:me/s.git', offline), false);
 });

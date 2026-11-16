@@ -71,3 +71,27 @@ export async function ensurePrivateRepo(token: string, fetchFn: Fetch = fetch): 
   if (!repo.private) throw new PublicRepoError('GitHub created a non-private repository; refusing to use it.');
   return { cloneUrl: repo.clone_url };
 }
+
+/** `owner/repo` of a github.com address (https, ssh or git@), or undefined for any other host. */
+export function githubSlug(repoUrl: string): string | undefined {
+  const m = repoUrl
+    .trim()
+    .match(/^(?:https?:\/\/(?:[^@/]+@)?|ssh:\/\/git@|git@)github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i);
+  return m ? `${m[1] ?? ''}/${m[2] ?? ''}` : undefined;
+}
+
+/**
+ * True only when GitHub itself says a repository is public: asked without a token, a private one answers 404. Any
+ * failure to ask (no network, rate limit) is «not known» and never blocks a push.
+ */
+export async function isPublicGithubRepo(repoUrl: string, fetchFn: Fetch = fetch): Promise<boolean> {
+  const slug = githubSlug(repoUrl);
+  if (!slug) return false;
+  try {
+    const res = await fetchFn(`${API}/repos/${slug}`, { headers: { Accept: 'application/vnd.github+json' } });
+    if (res.status !== 200) return false;
+    return ((await res.json()) as { private?: boolean }).private === false;
+  } catch {
+    return false;
+  }
+}

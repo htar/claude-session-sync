@@ -54,6 +54,31 @@ function pruneEmptyDirs(dir: string, isRoot = true): void {
   if (!isRoot && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
 }
 
+/** How many files travel at once: enough to hide the round trip of each, few enough not to hit rate limits. */
+const PARALLEL = 4;
+
+/** Runs `task` over `items`, `limit` at a time; the first failure stops starting new ones and is thrown. */
+async function pool<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const errors: unknown[] = [];
+  const worker = async (): Promise<void> => {
+    while (!errors.length && next < items.length) {
+      const index = next++;
+      try {
+        await task(items[index] as T, index);
+      } catch (e) {
+        errors.push(e);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  if (errors.length) throw errors[0];
+}
+
 /** Hash per file, valid while its size and modification time stay the same: unchanged sessions are not read again. */
 const hashed = new Map<string, { size: number; mtimeMs: number; hash: string }>();
 
@@ -106,7 +131,7 @@ export class MirrorTransport implements Transport {
       // Keep local edits for publish. Otherwise a changed provider revision means same-size remote content changed.
       if (f.revision && old && old.revision !== f.revision && (await digest(local)) === old.localHash) todo.push(f);
     }
-    for (const [i, f] of todo.entries()) {
+    await pool(todo, PARALLEL, async (f, i) => {
       this.onProgress(`Downloading ${i + 1}/${todo.length}: ${path.basename(f.rel)}`);
       const local = localPath(this.root, f.rel);
       const data = await this.store.download(f.rel);
@@ -114,7 +139,7 @@ export class MirrorTransport implements Transport {
       const tmp = path.join(path.dirname(local), `.${path.basename(local)}.tmp-${process.pid}`);
       await fs.promises.writeFile(tmp, data);
       await fs.promises.rename(tmp, local);
-    }
+    });
     this.known.clear();
     const nextState: RemoteState = {};
     for (const f of walk(this.root)) {
@@ -140,13 +165,13 @@ export class MirrorTransport implements Transport {
     const toUpload = local.filter(
       (f) => this.remote.get(f.rel) !== f.size || this.known.get(f.rel) !== hashes.get(f.rel),
     );
-    for (const [i, f] of toUpload.entries()) {
+    await pool(toUpload, PARALLEL, async (f, i) => {
       this.onProgress(`Uploading ${i + 1}/${toUpload.length}: ${path.basename(f.rel)}`);
       await this.store.upload(f.rel, await fs.promises.readFile(localPath(this.root, f.rel)));
       this.remote.set(f.rel, f.size);
       this.known.set(f.rel, hashes.get(f.rel) ?? '');
       changed = true;
-    }
+    });
     const toRemove = [...this.remote.keys()].filter((rel) => !localRels.has(rel));
     for (const [i, rel] of toRemove.entries()) {
       this.onProgress(`Deleting ${i + 1}/${toRemove.length}: ${path.basename(rel)}`);

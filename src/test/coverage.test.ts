@@ -1633,3 +1633,30 @@ test(
     assert.ok(result.copied.includes('good.jsonl'));
   },
 );
+
+test('MirrorTransport moves several files at once but never more than four, and a failure surfaces', async () => {
+  const root = tmp();
+  let running = 0;
+  let peak = 0;
+  let fail = false;
+  const store: RemoteStore = {
+    list: () => Promise.resolve([]),
+    download: () => Promise.resolve(Buffer.alloc(0)),
+    upload: async () => {
+      running++;
+      peak = Math.max(peak, running);
+      await new Promise((r) => setTimeout(r, 10));
+      running--;
+      if (fail) throw new Error('storage said no');
+    },
+    remove: () => Promise.resolve(),
+  };
+  const mirror = new MirrorTransport(root, store);
+  await mirror.refresh();
+  for (let i = 0; i < 12; i++) write(root, `f${i}.jsonl`, userLine(String(i)));
+  assert.equal(await mirror.publish(), true);
+  assert.ok(peak > 1 && peak <= 4, `peak was ${peak}`);
+  write(root, 'new.jsonl', userLine('x'));
+  fail = true;
+  await assert.rejects(mirror.publish(), /storage said no/);
+});

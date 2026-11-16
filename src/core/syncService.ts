@@ -87,9 +87,10 @@ export class SyncService {
   }
 
   /** `takeOver`: the user confirmed that a folder with this name is this very computer's (a reinstalled editor). */
-  push(opts: { takeOver?: boolean; review?: PushReview } = {}): Promise<SyncResult> {
+  push(opts: { takeOver?: boolean; review?: PushReview; ids?: readonly string[] } = {}): Promise<SyncResult> {
     return this.exclusive(async () => {
       const filter = this.pushFilter();
+      if (opts.ids) filter.only = new Set(opts.ids.map((id) => `${id}.jsonl`));
       let last: CopyResult | undefined;
       let reviewed = false;
       // A push can lose a race against another device: pull again and retry once.

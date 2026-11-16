@@ -1,13 +1,15 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { promisify } from 'node:util';
+import * as zlib from 'node:zlib';
 import { Transport } from './transport';
 
 /**
  * End-to-end encryption of the store with a passphrase. The storage (GitHub, Dropbox, a cloud folder) only ever sees
  * `<name>.enc` files and `encryption.json`; the plain transcripts live in a local cache on each device.
  *
- * File format: `CSS1` | 12-byte IV | 16-byte GCM tag | AES-256-GCM ciphertext. The key comes from the passphrase
+ * File format: `CSS1` (or `CSS2` when compressed first) | 12-byte IV | 16-byte GCM tag | AES-256-GCM ciphertext. The key comes from the passphrase
  * through scrypt with the salt in `encryption.json`, which also holds an encrypted check value to tell a wrong
  * passphrase from a damaged file. The `.enc` suffix keeps older versions of the extension from reading ciphertext as
  * a session.
@@ -15,6 +17,10 @@ import { Transport } from './transport';
 export const ENCRYPTION_FILE = 'encryption.json';
 const SUFFIX = '.enc';
 const MAGIC = Buffer.from('CSS1');
+/** Same layout, but the plaintext was gzip-compressed before encryption (ciphertext itself cannot be compressed). */
+const MAGIC_PACKED = Buffer.from('CSS2');
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 const CHECK = 'claude-session-sync';
 const SCRYPT = { N: 1 << 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
@@ -36,19 +42,31 @@ export function deriveKey(passphrase: string, saltB64: string): Buffer {
   return crypto.scryptSync(passphrase.normalize('NFC'), Buffer.from(saltB64, 'base64'), 32, SCRYPT);
 }
 
-export function encrypt(key: Buffer, plain: Buffer): Buffer {
+export function encrypt(key: Buffer, plain: Buffer, magic: Buffer = MAGIC): Buffer {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const body = Buffer.concat([cipher.update(plain), cipher.final()]);
-  return Buffer.concat([MAGIC, iv, cipher.getAuthTag(), body]);
+  return Buffer.concat([magic, iv, cipher.getAuthTag(), body]);
 }
 
 /** Throws when the data was not made with this key or was changed. */
 export function decrypt(key: Buffer, data: Buffer): Buffer {
-  if (data.length < 32 || !data.subarray(0, 4).equals(MAGIC)) throw new Error('Not an encrypted Claude Sync file.');
+  if (data.length < 32 || !(data.subarray(0, 4).equals(MAGIC) || data.subarray(0, 4).equals(MAGIC_PACKED)))
+    throw new Error('Not an encrypted Claude Sync file.');
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, data.subarray(4, 16));
   decipher.setAuthTag(data.subarray(16, 32));
   return Buffer.concat([decipher.update(data.subarray(32)), decipher.final()]);
+}
+
+/** Compresses, then encrypts: what goes into the store for a session file. */
+export async function sealFile(key: Buffer, plain: Buffer): Promise<Buffer> {
+  return encrypt(key, await gzip(plain), MAGIC_PACKED);
+}
+
+/** Reverse of `sealFile`; also reads files written uncompressed by earlier versions. */
+export async function openFile(key: Buffer, data: Buffer): Promise<Buffer> {
+  const plain = decrypt(key, data);
+  return data.subarray(0, 4).equals(MAGIC_PACKED) ? gunzip(plain) : plain;
 }
 
 /** New store settings for a passphrase: a random salt and the check value. */
@@ -183,7 +201,7 @@ export class EncryptingTransport implements Transport {
       const data = await fs.promises.readFile(abs(this.plainRoot, rel));
       const hash = sha1(data);
       if (this.synced.get(rel) === hash) continue;
-      const cipher = encrypt(key, data);
+      const cipher = await sealFile(key, data);
       await writeAtomicAsync(abs(this.inner.root, rel + SUFFIX), cipher);
       this.synced.set(rel, hash);
       this.cipherSeen.set(rel, sha1(cipher));
@@ -221,7 +239,7 @@ export class EncryptingTransport implements Transport {
         next.set(rel, known);
         continue;
       }
-      const data = decrypt(key, cipher);
+      const data = await openFile(key, cipher);
       await writeAtomicAsync(target, data);
       next.set(rel, sha1(data));
     }

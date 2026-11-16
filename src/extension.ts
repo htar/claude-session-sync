@@ -12,6 +12,7 @@ import { scanSessions } from './core/secrets';
 import { classifyError, redactSecrets } from './core/errors';
 import { retryingFetch } from './core/http';
 import { signIn, tokenProvider } from './core/oauth';
+import { GzipStore } from './core/gzipStore';
 import { MirrorTransport } from './core/remote';
 import { ensurePrivateRepo, githubAuthEnv, isPublicGithubRepo, PublicRepoError } from './core/github';
 import { Limits, MB, parseLimits } from './core/limits';
@@ -286,7 +287,7 @@ async function cloudTransport(context: vscode.ExtensionContext, cloud: CloudProv
   });
   return new MirrorTransport(
     path.join(context.globalStorageUri.fsPath, `${cloud.id}-cache`),
-    cloud.store(http, token),
+    new GzipStore(cloud.store(http, token)),
     step,
   );
 }
